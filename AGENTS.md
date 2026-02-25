@@ -53,6 +53,23 @@ pnpm format               # Oxfmt 格式化
 pnpm check                # lint + format 检查
 ```
 
+## 测试启动（每次 UI 测试前必读）
+
+```bash
+# 启动前端 dev server（自动清理旧进程、固定端口 5180）
+bash scripts/dev-test.sh
+
+# 单元测试
+pnpm test
+
+# 类型检查
+pnpm typecheck
+```
+
+- 脚本 `scripts/dev-test.sh` 会自动杀掉占用 5180 端口的旧进程后再启动
+- 浏览器验证地址: `http://localhost:5180`
+- 每次 UI 交互验证前，先执行 `bash scripts/dev-test.sh` 确保 dev server 干净启动
+
 ## 编码规范
 
 - TypeScript strict 模式，**不用 `any`**
