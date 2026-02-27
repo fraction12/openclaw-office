@@ -347,6 +347,8 @@
   "agents": {
     "title": "Agent Management",
     "description": "Manage agent configuration, core files, and model settings",
+    "panelTitle": "Agents",
+    "detailDescription": "Workspace and routing for agent {{id}}",
     "configured": "{{count}} configured.",
     "refresh": "Refresh",
     "searchPlaceholder": "Search agents...",
@@ -397,7 +399,10 @@
       "saving": "Saving...",
       "saveSuccess": "File saved",
       "saveError": "Failed to save",
-      "unsavedChanges": "Unsaved changes"
+      "unsavedChanges": "Unsaved changes",
+      "justNow": "just now",
+      "hoursAgo": "{{count}}h ago",
+      "daysAgo": "{{count}}d ago"
     },
     "tools": {
       "title": "Tool Policy",

@@ -13,16 +13,16 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / 1024).toFixed(1)} KB`;
 }
 
-function formatRelativeTime(raw: string | number): string {
+function formatRelativeTime(raw: string | number, t: (key: string, opts?: Record<string, unknown>) => string): string {
   const ts = typeof raw === "number" ? raw : new Date(raw).getTime();
   if (Number.isNaN(ts) || ts === 0) return "—";
   const diff = Date.now() - ts;
-  if (diff < 0) return "just now";
+  if (diff < 0) return t("agents.files.justNow");
   const hours = Math.floor(diff / 3_600_000);
-  if (hours < 1) return "just now";
-  if (hours < 24) return `${hours}h ago`;
+  if (hours < 1) return t("agents.files.justNow");
+  if (hours < 24) return t("agents.files.hoursAgo", { count: hours });
   const days = Math.floor(hours / 24);
-  return `${days}d ago`;
+  return t("agents.files.daysAgo", { count: days });
 }
 
 export function FilesTab({ agent }: FilesTabProps) {
@@ -78,7 +78,7 @@ export function FilesTab({ agent }: FilesTabProps) {
             >
               <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{file.name}</p>
               <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
-                {formatFileSize(file.size)} · {formatRelativeTime(file.modifiedAt)}
+                {formatFileSize(file.size)} · {formatRelativeTime(file.modifiedAt, t)}
               </p>
             </button>
           ))}

@@ -347,6 +347,8 @@
   "agents": {
     "title": "智能体管理",
     "description": "管理智能体配置、核心文件和模型设置",
+    "panelTitle": "智能体",
+    "detailDescription": "智能体 {{id}} 的工作空间与路由配置",
     "configured": "已配置 {{count}} 个",
     "refresh": "刷新",
     "searchPlaceholder": "搜索智能体...",
@@ -397,7 +399,10 @@
       "saving": "保存中...",
       "saveSuccess": "文件已保存",
       "saveError": "保存失败",
-      "unsavedChanges": "有未保存的更改"
+      "unsavedChanges": "有未保存的更改",
+      "justNow": "刚刚",
+      "hoursAgo": "{{count}} 小时前",
+      "daysAgo": "{{count}} 天前"
     },
     "tools": {
       "title": "工具策略",

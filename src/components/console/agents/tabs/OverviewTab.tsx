@@ -11,17 +11,28 @@ interface OverviewTabProps {
 
 export function OverviewTab({ agent }: OverviewTabProps) {
   const { t } = useTranslation("console");
-  const { defaultAgentId, updateAgentModel, setDeleteDialogOpen, systemModels, fetchSystemModels } = useAgentsStore();
+  const {
+    defaultAgentId, updateAgentModel, setDeleteDialogOpen,
+    systemModels, fetchSystemModels, agentModelConfigs,
+  } = useAgentsStore();
   const isDefault = agent.id === defaultAgentId;
 
-  const [primaryModel, setPrimaryModel] = useState("");
-  const [fallbacks, setFallbacks] = useState<string[]>([]);
+  const savedConfig = agentModelConfigs[agent.id];
+  const [primaryModel, setPrimaryModel] = useState(savedConfig?.primary ?? "");
+  const [fallbacks, setFallbacks] = useState<string[]>(savedConfig?.fallbacks ?? []);
   const [saving, setSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<"idle" | "success" | "error">("idle");
 
   useEffect(() => {
     if (systemModels.length === 0) fetchSystemModels();
   }, [systemModels.length, fetchSystemModels]);
+
+  useEffect(() => {
+    const cfg = agentModelConfigs[agent.id];
+    setPrimaryModel(cfg?.primary ?? "");
+    setFallbacks(cfg?.fallbacks ?? []);
+    setSaveStatus("idle");
+  }, [agent.id, agentModelConfigs]);
 
   const handleSaveModel = async () => {
     setSaving(true);
@@ -33,7 +44,10 @@ export function OverviewTab({ agent }: OverviewTabProps) {
     const ok = await updateAgentModel(agent.id, model);
     setSaving(false);
     setSaveStatus(ok ? "success" : "error");
-    if (ok) setTimeout(() => setSaveStatus("idle"), 2000);
+    if (ok) {
+      await fetchSystemModels();
+      setTimeout(() => setSaveStatus("idle"), 2000);
+    }
   };
 
   const addFallback = () => setFallbacks([...fallbacks, ""]);
@@ -160,15 +174,19 @@ interface ModelSelectProps {
 
 function ModelSelect({ value, onChange, models, placeholder }: ModelSelectProps) {
   const providers = [...new Set(models.map((m) => m.provider))];
+  const hasMatchingOption = models.some((m) => m.id === value);
 
   return (
     <div className="relative w-full">
       <select
-        value={value}
+        value={hasMatchingOption ? value : ""}
         onChange={(e) => onChange(e.target.value)}
         className="w-full appearance-none rounded-lg border border-gray-300 bg-white px-3 py-2 pr-8 text-sm text-gray-900 focus:border-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
       >
         <option value="">{placeholder}</option>
+        {!hasMatchingOption && value && (
+          <option value={value}>{value}</option>
+        )}
         {providers.map((provider) => (
           <optgroup key={provider} label={provider}>
             {models

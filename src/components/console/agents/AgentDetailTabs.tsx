@@ -40,8 +40,8 @@ export function AgentDetailTabs({ agent }: AgentDetailTabsProps) {
       </div>
 
       <div className="p-5">
-        {activeTab === "overview" && <OverviewTab agent={agent} />}
-        {activeTab === "files" && <FilesTab agent={agent} />}
+        {activeTab === "overview" && <OverviewTab key={agent.id} agent={agent} />}
+        {activeTab === "files" && <FilesTab key={agent.id} agent={agent} />}
         {activeTab === "tools" && <ToolsTab />}
         {activeTab === "skills" && <SkillsTab />}
         {activeTab === "channels" && <ChannelsTab />}

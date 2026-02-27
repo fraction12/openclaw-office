@@ -36,6 +36,7 @@ interface AgentsStoreState {
   deleteDialogOpen: boolean;
 
   systemModels: SystemModelOption[];
+  agentModelConfigs: Record<string, { primary: string; fallbacks: string[] }>;
 
   fetchAgents: () => Promise<void>;
   fetchSystemModels: () => Promise<void>;
@@ -78,27 +79,51 @@ export const useAgentsStore = create<AgentsStoreState>((set, get) => ({
   deleteDialogOpen: false,
 
   systemModels: [],
+  agentModelConfigs: {},
 
   fetchSystemModels: async () => {
     try {
       await waitForAdapter();
       const snap = await getAdapter().configGet();
-      const models = snap.config?.models as Record<string, unknown> | undefined;
+      const config = snap.config;
+
+      const models = config?.models as Record<string, unknown> | undefined;
       const providers = models?.providers as Record<string, Record<string, unknown>> | undefined;
-      if (!providers) return;
       const options: SystemModelOption[] = [];
-      for (const [providerId, provConfig] of Object.entries(providers)) {
-        const modelList = provConfig.models as Array<{ id: string; name?: string }> | undefined;
-        if (!modelList) continue;
-        for (const m of modelList) {
-          options.push({
-            id: `${providerId}/${m.id}`,
-            label: m.name ?? m.id,
-            provider: providerId,
-          });
+      if (providers) {
+        for (const [providerId, provConfig] of Object.entries(providers)) {
+          const modelList = provConfig.models as Array<{ id: string; name?: string }> | undefined;
+          if (!modelList) continue;
+          for (const m of modelList) {
+            options.push({
+              id: `${providerId}/${m.id}`,
+              label: m.name ?? m.id,
+              provider: providerId,
+            });
+          }
         }
       }
-      set({ systemModels: options });
+
+      const agentModelConfigs: Record<string, { primary: string; fallbacks: string[] }> = {};
+      const agentsList = (config?.agents as Record<string, unknown> | undefined)?.list as Array<Record<string, unknown>> | undefined;
+      if (agentsList) {
+        for (const entry of agentsList) {
+          const id = entry.id as string | undefined;
+          if (!id) continue;
+          const model = entry.model;
+          if (typeof model === "string") {
+            agentModelConfigs[id] = { primary: model, fallbacks: [] };
+          } else if (model && typeof model === "object" && !Array.isArray(model)) {
+            const m = model as { primary?: string; fallbacks?: string[] };
+            agentModelConfigs[id] = {
+              primary: m.primary ?? "",
+              fallbacks: m.fallbacks ?? [],
+            };
+          }
+        }
+      }
+
+      set({ systemModels: options, agentModelConfigs });
     } catch {
       // non-critical
     }

@@ -28,7 +28,7 @@ export function AgentDetailHeader({ agent }: AgentDetailHeaderProps) {
           <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">{displayName}</h2>
         </div>
         <p className="mt-0.5 text-sm text-gray-500 dark:text-gray-400">
-          Agent workspace and routing.
+          {t("agents.detailDescription", { id: agent.id })}
         </p>
       </div>
       <div className="flex shrink-0 flex-col items-end gap-1">
