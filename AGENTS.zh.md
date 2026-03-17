@@ -2,219 +2,221 @@
 
 > [English](./AGENTS.md)
 
-本文档为 AI 编码助手（Codex、Claude、Cursor Agent 等）提供项目开发的上下文和规则。
+本文档为在当前 OpenClaw Office 仓库中工作的 AI 编码助手提供上下文。
 
 ## 项目概述
 
-OpenClaw Office 是 [OpenClaw](https://github.com/openclaw/openclaw) Multi-Agent 系统的可视化监控与管理前端。它通过 WebSocket 连接 OpenClaw Gateway，将 Agent 协作具象化为"数字办公室"，同时提供完整的控制台管理界面。
+OpenClaw Office 是 [OpenClaw](https://github.com/openclaw/openclaw)
+的可视化监控与管理前端。它通过 WebSocket 连接 OpenClaw Gateway，
+将 Agent 的可观测信号整理为证据，再派生为：
 
-## 技术栈
+- `/` 的办公室视图
+- 底部的聊天 Dock
+- `/dashboard`、`/agents`、`/channels`、`/skills`、`/cron`、`/settings` 控制台
 
-| 类别     | 技术                                        |
-| -------- | ------------------------------------------- |
-| 语言     | TypeScript (ESM, strict mode)               |
-| UI 框架  | React 19                                    |
-| 构建工具 | Vite 6                                      |
-| 状态管理 | Zustand 5 + Immer                           |
-| 样式     | Tailwind CSS 4                              |
-| 2D 渲染  | SVG + CSS Animations                        |
-| 3D 渲染  | React Three Fiber (R3F) + @react-three/drei |
-| 路由     | React Router 7                              |
-| 图表     | Recharts                                    |
-| 国际化   | i18next + react-i18next                     |
-| 测试     | Vitest + @testing-library/react             |
-| 实时通信 | 原生 WebSocket API                          |
+## 当前技术栈
 
-## 功能模块
+| 领域 | 技术 |
+| --- | --- |
+| 语言 | TypeScript、ESM、strict mode |
+| UI | React 19 |
+| 构建 | Vite 6 |
+| 路由 | React Router 7，使用 `HashRouter` |
+| 状态管理 | Zustand 5 + Immer |
+| 样式 | Tailwind CSS 4 |
+| 2D 渲染 | 当前主办公室使用 Pixi.js，仓库中仍保留旧 SVG 办公室组件 |
+| 3D 渲染 | React Three Fiber + drei + postprocessing |
+| 图表 | Recharts |
+| i18n | i18next + react-i18next |
+| 测试 | Vitest + Testing Library |
+| 实时通信 | 原生 WebSocket API |
 
-### Office 视图（`/`）
+## 仓库中实际存在的内容
 
-等距风格的 2D/3D 虚拟办公室，实时展示 Agent 工作状态：
+### Office 视图
 
-- **2D 平面图** — SVG 渲染的办公室场景，含工位、家具（桌椅/沙发/植物/咖啡杯）、Agent 头像和状态动画
-- **3D 场景** — R3F 渲染的 3D 办公室，含角色模型、技能全息面板、传送门特效
-- **Agent 头像** — 基于 agentId 确定性生成的 SVG 头像，支持状态指示（idle/working/speaking/error）
-- **协作连线** — Agent 间的消息传递可视化
-- **气泡面板** — Markdown 文本流、工具调用展示
-- **右侧面板** — Agent 详情、指标图表（Token 折线图/成本饼图/活跃热力图）、子 Agent 关系图、事件时间轴
+- `src/pixi/` 是当前启用的 2D 办公室引擎与渲染器
+- `src/components/office-3d/` 是可切换的 3D 场景
+- `src/components/office-2d/` 仍保留较早的 SVG 办公室组件与头像实现
+- `src/components/panels/` 包含指标、时间轴、子 Agent、Agent 详情等面板
 
-### Chat 功能
+### 控制台
 
-底部停靠的聊天栏，支持与 Agent 实时对话：
+- Dashboard、agents、channels、skills、cron、settings 都有独立的页面、store 和组件分组
+- Skills 页面既管理本地已安装技能，也能浏览和搜索只读的 ClawHub 数据
+- Settings 包含 provider 管理、模型编辑、gateway、appearance、developer、advanced、about、update 等区域
 
-- Agent 选择器、流式消息展示、Markdown 渲染
-- 聊天历史抽屉、发送/中止控制
+### Gateway 集成
 
-### 控制台（`/dashboard`、`/agents`、`/channels`、`/skills`、`/cron`、`/settings`）
+- `src/gateway/ws-client.ts` 负责 socket 生命周期、challenge/connect 认证、重连和 shutdown 处理
+- `src/gateway/rpc-client.ts` 封装同一条 socket 上的 RPC
+- `src/gateway/ws-adapter.ts` 把 Gateway 能力暴露为统一 adapter 接口
+- `src/gateway/adapter-provider.ts` 在真实 adapter 和 mock adapter 之间切换
+- `src/gateway/clawhub-client.ts` 是独立的 ClawHub REST 客户端
 
-完整的系统管理界面：
+### 状态流水线
 
-- **Dashboard** — 概览统计卡片、告警横幅、Channel/Skill 概览、快捷导航
-- **Agents** — Agent 列表/创建/删除，详情多 Tab（Overview/Channels/Cron/Skills/Tools/Files）
-- **Channels** — 渠道卡片、配置对话框、统计、WhatsApp QR 绑定流程
-- **Skills** — 技能市场、安装选项、技能详情
-- **Cron** — 定时任务管理、统计栏
-- **Settings** — Provider 管理（添加/编辑/模型编辑器）、外观/Gateway/开发者/高级/关于/更新
+需要优先理解的核心架构：
 
-## 目录结构
-
+```text
+Gateway frames / RPC
+  -> event-parser
+  -> evidence-store
+  -> state-deriver
+  -> event-orchestrator
+  -> Zustand slices
+  -> Pixi / React / R3F
 ```
+
+关键文件：
+
+- `src/gateway/event-parser.ts`
+- `src/store/evidence-store.ts`
+- `src/lib/state-deriver.ts`
+- `src/store/event-orchestrator.ts`
+- `src/store/index.ts`
+
+如果你在排查 Agent 可见状态为什么不对，先看这些文件，再决定是否修改渲染层。
+
+## 目录说明
+
+```text
 src/
-├── main.tsx / App.tsx          # 入口与路由
-├── i18n/                       # 国际化（zh/en 双语）
-├── gateway/                    # Gateway 通信层
-│   ├── ws-client.ts / ws-adapter.ts  # WebSocket 客户端 + 认证 + 重连
-│   ├── rpc-client.ts           # RPC 请求封装
-│   ├── event-parser.ts         # 事件解析 + 状态映射
-│   ├── adapter.ts / adapter-provider.ts  # 适配器模式（真实/Mock 切换）
-│   └── mock-adapter.ts         # Mock 模式适配器
-├── store/                      # Zustand Store
-│   ├── office-store.ts         # 主 Store（Agent 状态、连接、UI）
-│   ├── agent-reducer.ts / metrics-reducer.ts / meeting-manager.ts
-│   └── console-stores/         # 控制台各页面 Store
-│       ├── agents-store.ts / channels-store.ts / skills-store.ts
-│       ├── cron-store.ts / dashboard-store.ts / settings-store.ts
-│       ├── chat-dock-store.ts / config-store.ts
-│       └── ...
+├── App.tsx, main.tsx            # 启动、路由、连接初始化
+├── gateway/                     # ws/rpc client、adapter、协议类型、ClawHub client
+├── store/                       # store slices、evidence、telemetry、事件编排
+├── pixi/                        # 当前主 2D 办公室引擎
 ├── components/
-│   ├── layout/                 # AppShell / ConsoleLayout / Sidebar / TopBar
-│   ├── office-2d/              # 2D SVG 平面图 + 家具组件
-│   ├── office-3d/              # 3D R3F 场景
-│   ├── overlays/               # SpeechBubble 等 HTML Overlay
-│   ├── panels/                 # 详情/指标/图表面板
-│   ├── chat/                   # Chat 停靠栏组件
-│   ├── console/                # 控制台各功能页组件
-│   │   ├── dashboard/ / agents/ / channels/
-│   │   ├── skills/ / cron/ / settings/ / shared/
-│   │   └── ...
-│   ├── pages/                  # 控制台路由页面
-│   └── shared/                 # 公共组件（Avatar/LanguageSwitcher 等）
-├── hooks/                      # 自定义 Hooks
-├── lib/                        # 工具函数库
-└── styles/                     # 全局样式
+│   ├── office-2d/               # 旧 SVG 办公室 UI
+│   ├── office-3d/               # R3F 场景
+│   ├── panels/                  # 办公室侧栏面板
+│   ├── chat/                    # 聊天 Dock
+│   ├── console/                 # 控制台功能组件
+│   ├── pages/                   # 路由页面
+│   ├── layout/                  # Shell 和导航
+│   └── shared/                  # 通用 UI
+├── hooks/                       # gateway、轮询、ambient、响应式 hooks
+├── lib/                         # 派生逻辑、持久化、视图辅助
+└── i18n/                        # 中英文翻译
 ```
 
 ## 开发命令
 
 ```bash
-pnpm install              # 安装依赖
-pnpm dev                  # 启动开发服务器 (port 5180)
-pnpm build                # 构建生产版本
-pnpm test                 # 运行测试
-pnpm test:watch           # 测试 watch 模式
-pnpm typecheck            # TypeScript 类型检查
-pnpm lint                 # Oxlint 检查
-pnpm format               # Oxfmt 格式化
-pnpm check                # lint + format 检查
+pnpm install
+pnpm dev
+pnpm build
+pnpm test
+pnpm test:watch
+pnpm typecheck
+pnpm lint
+pnpm format
+pnpm check
 ```
 
-## 编码规范
+说明：
 
-- TypeScript strict 模式，**不用 `any`**
-- 文件不超过 500 行，超过则拆分
-- 组件命名 PascalCase，hook 命名 useCamelCase
-- 使用 Oxlint + Oxfmt 规范
-- 注释仅用于解释非显而易见的逻辑
+- 标准工作流使用 `pnpm`
+- 如果环境里没有 `pnpm`，但依赖已经安装，`npm run <script>` 也可以执行脚本
+- `lint` 和 `format` 依赖 `oxlint`、`oxfmt` 二进制在 `PATH` 中可用
 
-## OpenClaw Gateway 集成
+## Gateway 行为
 
-### 连接与认证
+### 连接模型
 
-前端通过 WebSocket 连接 Gateway（默认 `ws://localhost:18789`），以 `openclaw-control-ui` 身份认证，请求 `operator.admin` scope。
-
-**认证前提配置：**
-
-1. **Gateway Token** — 写入 `.env.local`（在 `.gitignore` 中）：
-
-   ```bash
-   openclaw config get gateway.auth.token
-   # 将 token 写入 .env.local 的 VITE_GATEWAY_TOKEN
-   ```
-
-2. **Device Auth Bypass** — Gateway 2026.2.15+ 要求 device identity，Web 端需 bypass：
-
-   ```bash
-   openclaw config set gateway.controlUi.dangerouslyDisableDeviceAuth true
-   # 需重启 Gateway
-   ```
-
-3. **确保 Gateway 运行** — 本项目不负责启动 Gateway
+- 浏览器始终连接同源 `/gateway-ws`
+- 开发模式下由 Vite 代理到上游 Gateway
+- 打包后的 Node 服务也会代理这个路径
+- UI 可在本地 Gateway 和远程 Gateway 模式间切换，而无需修改浏览器侧代码
 
 ### 认证流程
 
-1. WebSocket 连接 → Gateway 发送 `connect.challenge`（含 nonce）
-2. 前端发送 `connect`（含 client.id、scopes、auth.token）
-3. Gateway 验证后返回 `hello-ok`
+1. WebSocket 建立连接
+2. Gateway 发送 `connect.challenge`
+3. UI 发送 `connect`，包含 `client.id = openclaw-control-ui`、scopes 和 token
+4. Gateway 返回 `hello-ok`
 
-### 事件与 RPC
+### 常见事件与 RPC
 
-**实时事件：** `agent`（生命周期/工具/文本/错误）、`presence`、`health`、`heartbeat`
+主要实时事件：
 
-**RPC 方法：** `agents.list`、`sessions.list`、`usage.status`、`tools.catalog`、`chat.send`、`chat.abort`、`chat.history`
+- `agent`
+- `chat`
+- `presence`
+- `health`
+- `heartbeat`
+- `cron`
+- `shutdown`
 
-### Agent 事件 Payload
+应用中常见的 RPC：
 
-```typescript
-type AgentEventPayload = {
-  runId: string;
-  seq: number;
-  stream: "lifecycle" | "tool" | "assistant" | "error";
-  ts: number;
-  data: Record<string, unknown>;
-  sessionKey?: string;
-};
-```
+- `agents.list`
+- `sessions.list`
+- `sessions.preview`
+- `sessions.delete`
+- `usage.status`
+- `tools.catalog`
+- `chat.send`
+- `chat.abort`
+- `chat.history`
+- `cron.list`
+- `config.get`
 
-### Chat 协议
+## Store 与状态规则
 
-| 方法/事件      | 方向  | 说明                                                        |
-| -------------- | ----- | ----------------------------------------------------------- |
-| `chat.send`    | RPC   | 发送消息 `{ sessionKey, message, deliver, idempotencyKey }` |
-| `chat.abort`   | RPC   | 中止当前 run `{ sessionKey }`                               |
-| `chat.history` | RPC   | 获取历史 `{ sessionKey }`                                   |
-| `chat`         | Event | 流式事件，state: `delta` / `final` / `error` / `aborted`    |
+- 把 evidence 和 derivation 视为真相来源。不要只在展示组件里偷偷编码新的状态规则。
+- `useGatewayConnection` 会从多个 fallback 数据源引导 agent 列表。除非能证明某个来源已经过时，否则不要随便删。
+- `event-orchestrator` 负责 run/session 映射、子 Agent 出现与消失、事件历史更新。
+- `office-ui-store`、`agent-entity-store`、`spatial-store`、`collaboration-store`、`telemetry-store` 会被组合为一个 Zustand store。
 
-## Agent 状态映射
+## i18n 规则
 
-| Gateway stream | data 关键字段    | 前端状态       | 视觉表现      |
-| -------------- | ---------------- | -------------- | ------------- |
-| `lifecycle`    | `phase: "start"` | `working`      | 加载动画      |
-| `lifecycle`    | `phase: "end"`   | `idle`         | 休闲状态      |
-| `tool`         | `name: "xxx"`    | `tool_calling` | 工具面板弹出  |
-| `assistant`    | `text: "..."`    | `speaking`     | Markdown 气泡 |
-| `error`        | `message: "..."` | `error`        | 红色叹号      |
+所有用户可见文本都应该经过 i18n。
 
-## 国际化（i18n）
+- React 组件：`useTranslation(namespace)`
+- 非 React 文件：`import i18n from "@/i18n"; i18n.t("ns:key")`
+- 中英文 locale JSON 必须保持 key 结构一致
+- 技术标识符、import 路径、CSS class 名不要翻译
 
-**所有用户可见的文本必须通过 i18n 翻译。**
+当前命名空间：
 
-- 命名空间：`common`、`layout`、`office`、`panels`、`chat`、`console`
-- React 组件用 `useTranslation(ns)` + `t("key")`
-- 非 React 文件用 `import i18n from "@/i18n"; i18n.t("ns:key")`
-- 中英文 JSON 必须保持 key 结构一致
-- 不由 i18n 管理：技术标识符、CSS 类名、import 路径
+- `common`
+- `layout`
+- `office`
+- `panels`
+- `chat`
+- `console`
 
-## Mock 模式
+## 质量要求
 
-`VITE_MOCK=true` 可在不连接 Gateway 的情况下使用模拟数据开发。
+在这个仓库里，实际应遵守的是这些规则：
 
-## 测试要求
+- 保持 TypeScript strict。避免新增 `any`；如果你碰到了现有 `any`，优先做顺手的缩减。
+- 新文件尽量控制在约 500 行以内，但优先保证边界清晰，不要为了凑数字制造无意义拆分。
+- 注释只写非显而易见的逻辑。
+- 保护 evidence-first 的状态模型。
+- 优先扩展已有 slice 和 helper，不要在组件里复制一套状态逻辑。
+- 所有用户可见字符串保持在 i18n 中。
 
-- `store/` 和 `gateway/event-parser.ts` **必须**有单元测试
-- 组件使用 `@testing-library/react` 测试关键交互
-- 关键数据流必须有测试
+当前仓库的现实情况：
 
-## Git 约定
+- 已经存在一些超长文件和少量 `any` 逃逸写法
+- 不要无故继续扩大这类漂移
+- 如果你正好修改到这些区域，优先做增量清理，而不是在未授权时做大范围重构
 
-- Conventional Commits 格式（中英均可）
-- 不提交 `.env` 文件、`node_modules`、`dist` 目录
+## 测试期望
 
-## 关键参考文件（OpenClaw 主项目）
+- 修改派生逻辑、事件解析、store 编排时，应补充或更新 `tests/` 下的单元测试
+- 修改关键 UI 流程时，应在可行范围内补充 Testing Library 覆盖
+- 有明显行为改动后，执行 `npm test` 或 `pnpm test`
+- 如果当前环境没有 lint/format 所需工具，要明确说明
 
-以下文件位于 OpenClaw 主仓库，包含 Gateway 协议和类型的权威定义：
+## OpenClaw 上游参考文件
 
-- `src/infra/agent-events.ts` — AgentEventPayload 类型
-- `src/gateway/protocol/schema/frames.ts` — WS 帧格式
-- `src/gateway/server/ws-connection.ts` — WS 认证流程
-- `src/gateway/server-methods-list.ts` — 所有 Gateway 事件/方法名
-- `src/config/types.agents.ts` — Agent 配置类型
+协议与类型仍以 OpenClaw 主仓库为准。常用参考文件：
+
+- `src/infra/agent-events.ts`
+- `src/gateway/protocol/schema/frames.ts`
+- `src/gateway/server/ws-connection.ts`
+- `src/gateway/server-methods-list.ts`
+- `src/config/types.agents.ts`

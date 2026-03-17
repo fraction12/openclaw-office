@@ -108,6 +108,17 @@ export function allocatePosition(
   };
 }
 
+export function allocateLoungePosition(
+  occupied: Set<string>,
+  preferredCount = occupied.size + 1,
+): { x: number; y: number } {
+  const positions = calculateLoungePositions(Math.max(preferredCount, occupied.size + 1));
+  return positions.find((pos) => !occupied.has(posKey(pos))) ?? positions[0] ?? {
+    x: ZONES.lounge.x + ZONES.lounge.width / 2,
+    y: ZONES.lounge.y + ZONES.lounge.height / 2,
+  };
+}
+
 /** Map 2D SVG coordinates to 3D world coordinates: x→x, y→z, ground plane y=0 */
 export function position2dTo3d(pos: { x: number; y: number }): [number, number, number] {
   return [pos.x * SCALE_X_2D_TO_3D, 0, pos.y * SCALE_Z_2D_TO_3D];
@@ -210,27 +221,31 @@ export function agentSlotIndex(agentId: string, totalSlots: number): number {
   return available[hashString(agentId) % available.length] ?? 0;
 }
 
-/**
- * Pre-defined anchor points in the lounge zone for idle sub-agents.
- * Positioned near sofas and coffee tables, avoiding overlap with decorative elements.
- */
 export function calculateLoungePositions(maxCount: number): Array<{ x: number; y: number }> {
+  if (maxCount <= 0) {
+    return [];
+  }
+
   const lz = ZONES.lounge;
-  const anchors = [
-    { x: lz.x + 60, y: lz.y + 40 },
-    { x: lz.x + 160, y: lz.y + 40 },
-    { x: lz.x + 260, y: lz.y + 40 },
-    { x: lz.x + 360, y: lz.y + 40 },
-    { x: lz.x + 60, y: lz.y + 120 },
-    { x: lz.x + 160, y: lz.y + 120 },
-    { x: lz.x + 260, y: lz.y + 120 },
-    { x: lz.x + 360, y: lz.y + 120 },
-    { x: lz.x + 440, y: lz.y + 60 },
-    { x: lz.x + 440, y: lz.y + 130 },
-    { x: lz.x + 100, y: lz.y + 180 },
-    { x: lz.x + 280, y: lz.y + 180 },
-  ];
-  return anchors.slice(0, Math.min(maxCount, anchors.length));
+  const padLeft = 56;
+  const padTop = 40;
+  const padRight = 130;
+  const padBottom = 64;
+  const usableWidth = Math.max(120, lz.width - padLeft - padRight);
+  const usableHeight = Math.max(100, lz.height - padTop - padBottom);
+  const cols = Math.min(4, Math.max(2, Math.ceil(Math.sqrt(maxCount))));
+  const rows = Math.max(1, Math.ceil(maxCount / cols));
+  const cellW = usableWidth / cols;
+  const cellH = usableHeight / rows;
+
+  return Array.from({ length: maxCount }, (_, index) => {
+    const col = index % cols;
+    const row = Math.floor(index / cols);
+    return {
+      x: Math.round(lz.x + padLeft + cellW * (col + 0.5)),
+      y: Math.round(lz.y + padTop + cellH * (row + 0.5)),
+    };
+  });
 }
 
 /** Meeting-zone seat positions (SVG coords, circular layout) */

@@ -18,92 +18,31 @@ export function getConfidenceVisualStyle(confidenceValue?: number | null): Confi
   const confidence = clampConfidence(confidenceValue);
 
   if (confidence > 0.8) {
-    return {
-      confidence,
-      opacity: 1,
-      ringOpacity: 1,
-      ringWidth: 3,
-      emissiveIntensity: 0.45,
-    };
+    return { confidence, opacity: 1, ringOpacity: 1, ringWidth: 3, emissiveIntensity: 0.45 };
   }
-
   if (confidence > 0.5) {
-    return {
-      confidence,
-      opacity: 0.84,
-      ringOpacity: 0.9,
-      ringWidth: 2.5,
-      emissiveIntensity: 0.32,
-    };
+    return { confidence, opacity: 0.84, ringOpacity: 0.9, ringWidth: 2.5, emissiveIntensity: 0.32 };
   }
-
   if (confidence > 0.2) {
-    return {
-      confidence,
-      opacity: 0.58,
-      ringOpacity: 0.72,
-      ringWidth: 2,
-      ringDasharray: "6 4",
-      emissiveIntensity: 0.2,
-    };
+    return { confidence, opacity: 0.58, ringOpacity: 0.72, ringWidth: 2, ringDasharray: "6 4", emissiveIntensity: 0.2 };
   }
-
-  return {
-    confidence,
-    opacity: 0.34,
-    ringOpacity: 0.55,
-    ringWidth: 1.5,
-    ringDasharray: "3 5",
-    emissiveIntensity: 0.08,
-  };
+  return { confidence, opacity: 0.34, ringOpacity: 0.55, ringWidth: 1.5, ringDasharray: "3 5", emissiveIntensity: 0.08 };
 }
 
 export function getStatusIndicator(status: AgentVisualStatus): string | null {
-  switch (status) {
-    case "sleeping":
-      return "zzz";
-    case "stale":
-      return "◷";
-    case "unknown":
-      return "?";
-    case "disconnected":
-      return "⛔";
-    case "error":
-      return "!";
-    default:
-      return null;
-  }
+  return status === "error" ? "!" : null;
 }
 
 export function getStatusRingDasharray(status: AgentVisualStatus): string | undefined {
-  switch (status) {
-    case "tool_calling":
-    case "stale":
-    case "disconnected":
-      return "6 3";
-    case "unknown":
-      return "3 5";
-    default:
-      return undefined;
-  }
+  return status === "error" ? "6 3" : undefined;
 }
 
 export function getStatusAnimation(status: AgentVisualStatus): string | undefined {
   switch (status) {
-    case "thinking":
+    case "active":
       return "agent-pulse 1.5s ease-in-out infinite";
-    case "tool_calling":
-      return "agent-pulse 2s ease-in-out infinite";
-    case "speaking":
-      return "agent-pulse 1s ease-in-out infinite";
     case "error":
       return "agent-blink 0.8s ease-in-out infinite";
-    case "spawning":
-      return "agent-spawn 0.5s ease-out forwards";
-    case "sleeping":
-      return "agent-pulse 2.8s ease-in-out infinite";
-    case "disconnected":
-      return "agent-blink 1.4s ease-in-out infinite";
     default:
       return undefined;
   }
@@ -122,9 +61,5 @@ export function getAgentConfidence(agent: VisualAgent): number {
   if (typeof agent.confidence === "number") return clampConfidence(agent.confidence);
   if (agent.isPlaceholder) return 0.15;
   if (!agent.confirmed) return 0.45;
-  if (agent.status === "unknown") return 0.1;
-  if (agent.status === "stale") return 0.35;
-  if (agent.status === "disconnected") return 0.2;
-  if (agent.status === "sleeping") return 0.65;
   return 1;
 }

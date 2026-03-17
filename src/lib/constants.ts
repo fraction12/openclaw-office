@@ -1,43 +1,40 @@
 import type { AgentVisualStatus } from "@/gateway/types";
 import i18n from "@/i18n";
+import { getActiveLayout, getCorridorCenter, getCorridorEntrance, getOfficeFrame, getZoneByPurpose } from "./zone-config";
 
-export const SVG_WIDTH = 1200;
-export const SVG_HEIGHT = 700;
+const layout = getActiveLayout();
+const officeFrame = getOfficeFrame(layout);
+const deskZone = getZoneByPurpose(layout, "desk");
+const meetingZone = getZoneByPurpose(layout, "meeting");
+const hotDeskZone = getZoneByPurpose(layout, "hotDesk");
+const loungeZone = getZoneByPurpose(layout, "lounge");
+
+export const SVG_WIDTH = layout.svgWidth;
+export const SVG_HEIGHT = layout.svgHeight;
 
 // Unified office floor plan: one building shell with internal partitions
 export const OFFICE = {
-  x: 30,
-  y: 20,
-  width: SVG_WIDTH - 60,
-  height: SVG_HEIGHT - 40,
-  wallThickness: 6,
-  cornerRadius: 18,
-  corridorWidth: 28,
+  x: officeFrame.x,
+  y: officeFrame.y,
+  width: officeFrame.width,
+  height: officeFrame.height,
+  wallThickness: layout.wallThickness,
+  cornerRadius: layout.cornerRadius,
+  corridorWidth: layout.corridorWidth,
 } as const;
 
-const halfW = (OFFICE.width - OFFICE.corridorWidth) / 2;
-const halfH = (OFFICE.height - OFFICE.corridorWidth) / 2;
-const rightX = OFFICE.x + halfW + OFFICE.corridorWidth;
-const bottomY = OFFICE.y + halfH + OFFICE.corridorWidth;
-
 export const ZONES = {
-  desk: { x: OFFICE.x, y: OFFICE.y, width: halfW, height: halfH, label: "Offices" },
-  meeting: { x: rightX, y: OFFICE.y, width: halfW, height: halfH, label: "Meeting Zone" },
-  hotDesk: { x: OFFICE.x, y: bottomY, width: halfW, height: halfH, label: "Sub-agents" },
-  lounge: { x: rightX, y: bottomY, width: halfW, height: halfH, label: "Lounge" },
+  desk: { x: deskZone?.x ?? OFFICE.x, y: deskZone?.y ?? OFFICE.y, width: deskZone?.width ?? OFFICE.width / 2, height: deskZone?.height ?? OFFICE.height / 2, label: "Main Office" },
+  meeting: { x: meetingZone?.x ?? OFFICE.x, y: meetingZone?.y ?? OFFICE.y, width: meetingZone?.width ?? OFFICE.width / 2, height: meetingZone?.height ?? OFFICE.height / 2, label: "Meeting Room" },
+  hotDesk: { x: hotDeskZone?.x ?? OFFICE.x, y: hotDeskZone?.y ?? OFFICE.y, width: hotDeskZone?.width ?? OFFICE.width / 2, height: hotDeskZone?.height ?? OFFICE.height / 2, label: "Subagent Desks" },
+  lounge: { x: loungeZone?.x ?? OFFICE.x, y: loungeZone?.y ?? OFFICE.y, width: loungeZone?.width ?? OFFICE.width / 2, height: loungeZone?.height ?? OFFICE.height / 2, label: "Lounge" },
 } as const;
 
 // Corridor entrance point: bottom center of the building (main entrance door)
-export const CORRIDOR_ENTRANCE = {
-  x: ZONES.lounge.x + ZONES.lounge.width / 2,
-  y: OFFICE.y + OFFICE.height - 30,
-} as const;
+export const CORRIDOR_ENTRANCE = getCorridorEntrance(layout);
 
 // Corridor center crossing point
-export const CORRIDOR_CENTER = {
-  x: OFFICE.x + OFFICE.width / 2,
-  y: OFFICE.y + OFFICE.height / 2,
-} as const;
+export const CORRIDOR_CENTER = getCorridorCenter(layout);
 
 export const ZONE_COLORS = {
   desk: "#f4f6f9",
@@ -58,31 +55,15 @@ export const ZONE_COLORS_DARK = {
 } as const;
 
 export const STATUS_COLORS: Record<AgentVisualStatus, string> = {
+  active: "#3B82F6",
   idle: "#6B7280",
-  thinking: "#3B82F6",
-  tool_calling: "#F59E0B",
-  speaking: "#10B981",
-  spawning: "#8B5CF6",
   error: "#EF4444",
-  offline: "#374151",
-  sleeping: "#6366F1",
-  stale: "#9CA3AF",
-  unknown: "#D1D5DB",
-  disconnected: "#DC2626",
 };
 
 export const STATUS_LABELS: Record<AgentVisualStatus, string> = {
+  active: "Active",
   idle: "Idle",
-  thinking: "Thinking",
-  tool_calling: "Tool Call",
-  speaking: "Speaking",
-  spawning: "Spawning",
   error: "Error",
-  offline: "Offline",
-  sleeping: "Sleeping",
-  stale: "Stale",
-  unknown: "Unknown",
-  disconnected: "Disconnected",
 };
 
 export function getZoneLabel(zone: keyof typeof ZONES): string {

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Settings, Bot, Clock, Radio, Wrench, BarChart3, Volume2, VolumeX } from "lucide-react";
+import { Settings, Bot, Clock, Radio, Wrench, BarChart3 } from "lucide-react";
 import { isSoundEnabled, playEnableConfirmation } from "@/lib/ambient";
 import { toggleAmbientSound } from "@/hooks/useAmbient";
 import { useOfficeStore } from "@/store";
@@ -22,7 +22,7 @@ export function QuickSettingsPanel() {
 
   const agentCount = agents.size;
   const activeCount = Array.from(agents.values()).filter(
-    (a) => a.status !== "idle" && a.status !== "offline" && a.status !== "sleeping",
+    (a) => a.status === "active",
   ).length;
 
   return (
@@ -55,7 +55,7 @@ export function QuickSettingsPanel() {
               : "bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400"
           }`}
         >
-          {soundOn ? <Volume2 className="h-3 w-3" /> : <VolumeX className="h-3 w-3" />}
+          <span className="text-[10px]">{soundOn ? "🔊" : "🔇"}</span>
           {soundOn ? "On" : "Off"}
         </button>
       </div>

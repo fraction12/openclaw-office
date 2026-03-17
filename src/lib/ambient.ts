@@ -54,6 +54,10 @@ function ensureGestureResume(): void {
   if (gestureListenerAttached || typeof document === "undefined") return;
   gestureListenerAttached = true;
   const resume = () => {
+    // Create AudioContext on first user gesture if sound is enabled
+    if (soundEnabled && !audioCtx) {
+      try { audioCtx = new AudioContext(); } catch { /* unsupported */ }
+    }
     if (audioCtx?.state === "suspended") {
       audioCtx.resume().catch(() => {});
     }
@@ -69,15 +73,10 @@ function ensureGestureResume(): void {
 export function setSoundEnabled(enabled: boolean): void {
   soundEnabled = enabled;
   if (enabled) {
-    if (!audioCtx) {
-      try { audioCtx = new AudioContext(); } catch { /* unsupported */ }
-    }
-    // If called from a user gesture (toggle click), this resume works immediately.
-    // If called from restoreAmbientSound on load, we attach a gesture listener.
-    if (audioCtx?.state === "suspended") {
-      audioCtx.resume().catch(() => {});
-      ensureGestureResume();
-    }
+    // Don't eagerly create AudioContext — browsers block it before user gesture.
+    // Instead, defer creation to the first actual sound request (getAudioCtx)
+    // or let a user-gesture listener resume a suspended context.
+    ensureGestureResume();
   }
 }
 

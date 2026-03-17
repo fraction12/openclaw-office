@@ -1,9 +1,9 @@
 {
   "loading3D": "加载 3D 场景...",
   "zones": {
-    "desk": "办公室",
-    "meeting": "会议区",
-    "hotDesk": "子代理区",
+    "desk": "主办公室",
+    "meeting": "会议室",
+    "hotDesk": "子代理工位",
     "lounge": "休息区"
   }
 }

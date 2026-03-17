@@ -10,7 +10,7 @@ export function computeMetrics(
   for (const agent of agents.values()) {
     if (agent.isPlaceholder || !agent.confirmed) continue;
     realCount++;
-    if (agent.status !== "idle" && agent.status !== "offline") {
+    if (agent.status === "active") {
       activeCount++;
     }
   }

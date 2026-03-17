@@ -33,7 +33,7 @@ export function AgentDetailPanel() {
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
 
-  const isWorking = agent.status === "thinking" || agent.status === "tool_calling" || agent.status === "speaking";
+  const isWorking = agent.status === "active";
 
   const handleSendTask = useCallback(async () => {
     if (!taskInput.trim()) return;

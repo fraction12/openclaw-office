@@ -132,7 +132,7 @@ export function EventTimeline() {
           <span
             className="shrink-0 font-medium"
             style={{
-              color: STATUS_COLORS[evt.stream === "error" ? "error" : "thinking"],
+              color: STATUS_COLORS[evt.stream === "error" ? "error" : "active"],
             }}
           >
             {evt.agentName}

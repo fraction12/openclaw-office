@@ -1,13 +1,28 @@
 import type { StateCreator } from "zustand";
 import type { AgentZone, OfficeStore, VisualAgent } from "@/gateway/types";
-import { calculateLoungePositions } from "@/lib/position-allocator";
+import { getPreferredZone, getWorkZoneForAgent } from "@/lib/agent-zone-policy";
+import { allocateLoungePosition, calculateLoungePositions } from "@/lib/position-allocator";
 import { calculateWalkDuration, interpolatePathPosition, planWalkPath } from "@/lib/movement-animator";
-import { allocateNextPosition, HOTDESK_TO_LOUNGE_DELAY_MS, isActiveStatus, LOUNGE_TO_HOTDESK_DEBOUNCE_MS, nextPlaceholderIndex, positionKey } from "./store-helpers";
+import { allocateNextPosition, getLoungeSeatCount, HOTDESK_TO_LOUNGE_DELAY_MS, isActiveStatus, LOUNGE_TO_HOTDESK_DEBOUNCE_MS, nextPlaceholderIndex, positionKey } from "./store-helpers";
 
 export interface SpatialInternals {
   zoneMigrationTimers: Map<string, ReturnType<typeof setTimeout>>;
   clearSpatialTimers: () => void;
   scheduleZoneMigration: (agentId: string, prevStatus: VisualAgent["status"], newStatus: VisualAgent["status"]) => void;
+}
+
+function advanceMovement(agent: VisualAgent, deltaTime: number): void {
+  if (!agent.movement) return;
+
+  agent.movement.progress = Math.min(agent.movement.progress + deltaTime / agent.movement.duration, 1);
+  agent.position = interpolatePathPosition(agent.movement.path, agent.movement.progress);
+
+  if (agent.movement.progress >= 1) {
+    const finalPos = agent.movement.path[agent.movement.path.length - 1];
+    agent.zone = agent.movement.toZone;
+    agent.position = { ...finalPos };
+    agent.movement = null;
+  }
 }
 
 export const createSpatialSlice = (
@@ -17,7 +32,10 @@ export const createSpatialSlice = (
   moveToMeeting: (agentId, meetingPosition) => {
     set((state) => {
       const agent = state.agents.get(agentId);
-      if (agent && !agent.originalPosition) agent.originalPosition = { ...agent.position };
+      if (agent && !agent.originalPosition) {
+        agent.originalPosition = { ...agent.position };
+        agent.originalZone = agent.zone;
+      }
     });
     get().startMovement(agentId, "meeting", meetingPosition);
   },
@@ -25,16 +43,24 @@ export const createSpatialSlice = (
   returnFromMeeting: (agentId) => {
     const agent = get().agents.get(agentId);
     if (!agent?.originalPosition) return;
-    const fallbackZone: AgentZone = agent.isSubAgent ? "hotDesk" : "desk";
+    const fallbackZone: AgentZone = getPreferredZone(agent);
     const occupied = new Set<string>();
     for (const other of get().agents.values()) {
       if (other.id !== agentId && other.zone === fallbackZone) occupied.add(positionKey(other.position));
     }
-    const originalStillMeaningful = agent.originalPosition.x >= 0 && agent.originalPosition.y >= 0 && !occupied.has(positionKey(agent.originalPosition));
-    const returnPos = originalStillMeaningful ? { ...agent.originalPosition } : allocateNextPosition(get().agents, fallbackZone, get().maxSubAgents);
+    const originalStillMeaningful = agent.originalZone === fallbackZone
+      && agent.originalPosition.x >= 0
+      && agent.originalPosition.y >= 0
+      && !occupied.has(positionKey(agent.originalPosition));
+    const returnPos = originalStillMeaningful
+      ? { ...agent.originalPosition }
+      : allocateNextPosition(get().agents, fallbackZone, get().maxSubAgents);
     set((state) => {
       const a = state.agents.get(agentId);
-      if (a) a.originalPosition = null;
+      if (a) {
+        a.originalPosition = null;
+        a.originalZone = null;
+      }
     });
     get().startMovement(agentId, fallbackZone, returnPos);
   },
@@ -61,14 +87,14 @@ export const createSpatialSlice = (
 
   tickMovement: (agentId, deltaTime) => set((state) => {
     const agent = state.agents.get(agentId);
-    if (!agent?.movement) return;
-    agent.movement.progress = Math.min(agent.movement.progress + deltaTime / agent.movement.duration, 1);
-    agent.position = interpolatePathPosition(agent.movement.path, agent.movement.progress);
-    if (agent.movement.progress >= 1) {
-      const finalPos = agent.movement.path[agent.movement.path.length - 1];
-      agent.zone = agent.movement.toZone;
-      agent.position = { ...finalPos };
-      agent.movement = null;
+    if (!agent) return;
+    advanceMovement(agent, deltaTime);
+  }),
+
+  tickMovements: (deltaTime) => set((state) => {
+    if (deltaTime <= 0) return;
+    for (const agent of state.agents.values()) {
+      advanceMovement(agent, deltaTime);
     }
   }),
 
@@ -82,17 +108,21 @@ export const createSpatialSlice = (
   }),
 
   prefillLoungePlaceholders: (count) => set((state) => {
-    const loungePositions = calculateLoungePositions(count);
+    const loungePositions = calculateLoungePositions(getLoungeSeatCount(state.agents, count, count));
     for (const agent of [...state.agents.values()]) {
       if (agent.isPlaceholder && agent.zone === "lounge" && !loungePositions.some((p) => p.x === agent.position.x && p.y === agent.position.y)) {
         state.agents.delete(agent.id);
       }
     }
     const activePlaceholders = [...state.agents.values()].filter((a) => a.isPlaceholder && a.zone === "lounge");
-    const wanted = Math.min(count, loungePositions.length);
-    const usedPositions = new Set(activePlaceholders.map((a) => positionKey(a.position)));
+    const wanted = count;
+    const usedPositions = new Set(
+      [...state.agents.values()]
+        .filter((agent) => agent.zone === "lounge")
+        .map((agent) => positionKey(agent.position)),
+    );
     for (let i = activePlaceholders.length; i < wanted; i++) {
-      const pos = loungePositions.find((p) => !usedPositions.has(positionKey(p)));
+      const pos = allocateLoungePosition(usedPositions, loungePositions.length);
       if (!pos) break;
       usedPositions.add(positionKey(pos));
       const idx = nextPlaceholderIndex(state.agents);
@@ -115,6 +145,7 @@ export const createSpatialSlice = (
         childAgentIds: [],
         zone: "lounge",
         originalPosition: null,
+        originalZone: null,
         movement: null,
         confirmed: true,
         cronLabel: null,
@@ -151,8 +182,10 @@ export function createSpatialInternals(getStore: () => OfficeStore): SpatialInte
           zoneMigrationTimers.delete(agentId);
           const state = getStore();
           const agent = state.agents.get(agentId);
-          if (!agent || !agent.isSubAgent || agent.zone !== "lounge" || agent.movement?.toZone === "hotDesk") return;
-          state.startMovement(agentId, "hotDesk");
+          if (!agent || agent.isPlaceholder || !agent.confirmed || agent.zone === "meeting") return;
+          const workZone = getWorkZoneForAgent(agent);
+          if (agent.zone === workZone || agent.movement?.toZone === workZone) return;
+          state.startMovement(agentId, workZone);
         }, LOUNGE_TO_HOTDESK_DEBOUNCE_MS);
         zoneMigrationTimers.set(agentId, timer);
       } else if (wasActive && !nowActive && newStatus === "idle") {
@@ -160,7 +193,8 @@ export function createSpatialInternals(getStore: () => OfficeStore): SpatialInte
           zoneMigrationTimers.delete(agentId);
           const state = getStore();
           const agent = state.agents.get(agentId);
-          if (!agent || !agent.isSubAgent || agent.zone !== "hotDesk" || isActiveStatus(agent.status) || agent.movement?.toZone === "lounge") return;
+          if (!agent || agent.isPlaceholder || !agent.confirmed || agent.zone === "meeting" || isActiveStatus(agent.status) || agent.movement?.toZone === "lounge") return;
+          if (agent.zone === "lounge") return;
           state.startMovement(agentId, "lounge");
         }, HOTDESK_TO_LOUNGE_DELAY_MS);
         zoneMigrationTimers.set(agentId, timer);

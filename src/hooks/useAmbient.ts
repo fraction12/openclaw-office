@@ -27,7 +27,7 @@ export function useAmbient() {
     const agentList = Array.from(agents.values());
     const total = agentList.length;
     const active = agentList.filter(
-      (a) => a.status !== "idle" && a.status !== "offline" && a.status !== "sleeping",
+      (a) => a.status === "active",
     ).length;
 
     const now = Date.now();
@@ -62,15 +62,13 @@ export function useAmbient() {
       if (agent.status === "error") {
         playError();
       } else if (
-        agent.status === "thinking" ||
-        agent.status === "tool_calling" ||
-        agent.status === "speaking"
+        agent.status === "active"
       ) {
-        if (prev === "idle" || prev === "sleeping") {
+        if (prev === "idle") {
           playAgentActive();
         }
-      } else if (agent.status === "idle" || agent.status === "sleeping") {
-        if (prev === "thinking" || prev === "tool_calling" || prev === "speaking") {
+      } else if (agent.status === "idle") {
+        if (prev === "active") {
           playAgentIdle();
         }
       }

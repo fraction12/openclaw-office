@@ -69,7 +69,7 @@ export function useUsagePoller(rpcRef: React.RefObject<GatewayRpcClient | null>)
           for (const agentId of Object.keys(resolved.byAgent)) {
             const agent = useOfficeStore.getState().agents.get(agentId);
             if (!agent) continue;
-            if (agent.status !== "spawning" && agent.status !== "offline") {
+            if (agent.status === "active" || agent.status === "idle" || agent.status === "error") {
               evidenceStore.setHttpSessionStatus(agentId, agent.status, now);
             }
             if (agent.currentTool?.name) {

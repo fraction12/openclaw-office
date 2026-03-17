@@ -113,8 +113,17 @@ export function useGatewayConnection({ url, token }: UseGatewayConnectionOptions
       );
     }, 5_000);
 
-    ws.connect(url, token);
+    // Defer connection slightly so React Strict Mode's immediate
+    // mount→unmount→remount cycle doesn't create & kill a WebSocket
+    // before it even opens (which causes browser console warnings).
+    let cancelled = false;
+    const connectTimer = setTimeout(() => {
+      if (!cancelled) ws.connect(url, token);
+    }, 0);
+
     return () => {
+      cancelled = true;
+      clearTimeout(connectTimer);
       throttle.destroy();
       ws.disconnect();
       resetAdapter();

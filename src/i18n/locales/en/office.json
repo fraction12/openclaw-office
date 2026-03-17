@@ -1,9 +1,9 @@
 {
   "loading3D": "Loading 3D scene...",
   "zones": {
-    "desk": "Offices",
-    "meeting": "Meeting Zone",
-    "hotDesk": "Sub-agents",
-    "lounge": "Lounge Zone"
+    "desk": "Main Office",
+    "meeting": "Meeting Room",
+    "hotDesk": "Subagent Desks",
+    "lounge": "Lounge"
   }
 }

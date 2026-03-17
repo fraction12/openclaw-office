@@ -1,7 +1,6 @@
-import { resolve } from "node:path";
-import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { resolve, join } from "node:path";
+import { readFileSync } from "node:fs";
 import { request as httpRequest } from "node:http";
 import { request as httpsRequest } from "node:https";
 import tailwindcss from "@tailwindcss/vite";
@@ -11,27 +10,6 @@ const pkg = JSON.parse(readFileSync(resolve(__dirname, "package.json"), "utf-8")
 const RUNTIME_CONNECTION_PATH = "/__openclaw/connection";
 const TOKEN_PATH = "/__openclaw/token";
 const GATEWAY_PROXY_PATH = "/gateway-ws";
-
-function readTokenFromConfig(home = homedir()) {
-    const candidates = [
-        join(home, ".openclaw", "openclaw.json"),
-        join(home, ".clawdbot", "clawdbot.json"),
-    ];
-    for (const filePath of candidates) {
-        try {
-            const raw = readFileSync(filePath, "utf-8");
-            const config = JSON.parse(raw);
-            const token = config?.gateway?.auth?.token;
-            if (typeof token === "string" && token.length > 0) return token;
-        } catch {}
-    }
-    return "";
-}
-
-function resolveGatewayToken(mode) {
-    const env = loadEnv(mode, process.cwd(), "");
-    return env.OPENCLAW_GATEWAY_TOKEN || readTokenFromConfig();
-}
 function normalizeGatewayTarget(rawTarget) {
     try {
         const parsed = new URL(rawTarget);
@@ -46,6 +24,63 @@ function normalizeGatewayTarget(rawTarget) {
     }
     catch {
         return rawTarget;
+    }
+}
+function readTokenFromConfig(homeDir = homedir()) {
+    const candidates = [
+        join(homeDir, ".openclaw", "openclaw.json"),
+        join(homeDir, ".clawdbot", "clawdbot.json"),
+    ];
+    for (const filePath of candidates) {
+        try {
+            const raw = readFileSync(filePath, "utf-8");
+            const config = JSON.parse(raw);
+            const token = config.gateway?.auth?.token;
+            if (typeof token === "string" && token.length > 0) {
+                return token;
+            }
+        }
+        catch {
+            // ignore missing or malformed files
+        }
+    }
+    return "";
+}
+function resolveGatewayToken(mode) {
+    const env = loadEnv(mode, process.cwd(), "");
+    return env.OPENCLAW_GATEWAY_TOKEN || readTokenFromConfig();
+}
+function isLoopbackHost(hostname) {
+    const normalized = hostname.toLowerCase();
+    return (normalized === "localhost" ||
+        normalized === "127.0.0.1" ||
+        normalized === "::1" ||
+        normalized === "[::1]");
+}
+function isAllowedTokenRequest(req) {
+    const hostHeader = req.headers.host;
+    if (!hostHeader) {
+        return false;
+    }
+    let requestUrl;
+    try {
+        requestUrl = new URL(req.url || "/", `http://${hostHeader}`);
+    }
+    catch {
+        return false;
+    }
+    if (isLoopbackHost(requestUrl.hostname)) {
+        return true;
+    }
+    const originHeader = req.headers.origin;
+    if (!originHeader) {
+        return false;
+    }
+    try {
+        return new URL(originHeader).host === hostHeader;
+    }
+    catch {
+        return false;
     }
 }
 function resolveGatewayTarget(mode) {
@@ -116,12 +151,16 @@ function proxyGatewayUpgrade(req, downstreamSocket, downstreamHead, gatewayTarge
     }
     const upstreamUrl = toUpstreamHttpUrl(gatewayTarget);
     const requestImpl = upstreamUrl.protocol === "https:" ? httpsRequest : httpRequest;
+    // Forward the browser's original Origin so the gateway can validate
+    // it against allowedOrigins. Only fall back to the gateway's own
+    // origin when no browser Origin is available.
+    const browserOrigin = req.headers.origin;
     const upstreamReq = requestImpl(upstreamUrl, {
         method: "GET",
         headers: {
             ...req.headers,
             host: upstreamUrl.host,
-            origin: toGatewayOrigin(gatewayTarget),
+            origin: browserOrigin || toGatewayOrigin(gatewayTarget),
             connection: "Upgrade",
             upgrade: "websocket",
         },
@@ -182,6 +221,7 @@ export default defineConfig(({ mode }) => {
             tailwindcss(),
             {
                 name: "openclaw-dev-connection",
+                enforce: "pre",
                 configureServer(server) {
                     server.httpServer?.on("upgrade", (req, socket, head) => {
                         proxyGatewayUpgrade(req, socket, head, currentGatewayTarget);
@@ -196,7 +236,6 @@ export default defineConfig(({ mode }) => {
                         res.setHeader("Content-Type", "application/json; charset=utf-8");
                         res.end(JSON.stringify({ token: gatewayToken }));
                     });
-
                     server.middlewares.use(async (req, res, next) => {
                         const pathname = (req.url ?? "").split("?")[0];
                         if (pathname === TOKEN_PATH || pathname === "/token") {
@@ -261,7 +300,7 @@ export default defineConfig(({ mode }) => {
         },
         server: {
             port: 5180,
-            allowedHosts: true,
+            allowedHosts: ["dushyants-mac-mini.tailfe16f6.ts.net"],
         },
     };
 });

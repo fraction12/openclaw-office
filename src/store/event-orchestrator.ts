@@ -147,7 +147,9 @@ export function processAgentEvent(store: OfficeStore, setState: (updater: (state
     if (agent) {
       const prevStatus = agent.status;
       applyEventToAgent(agent, parsed, derived, event.ts);
-      if (agent.isSubAgent && agent.confirmed && agent.zone !== "meeting") spatialInternals.scheduleZoneMigration(agent.id, prevStatus, agent.status);
+      if (agent.confirmed && !agent.isPlaceholder && agent.zone !== "meeting") {
+        spatialInternals.scheduleZoneMigration(agent.id, prevStatus, agent.status);
+      }
     }
 
     const historyItem: EventHistoryItem = { timestamp: event.ts, agentId, agentName: agent?.name ?? agentId, stream: event.stream, summary: parsed.summary };

@@ -27,7 +27,7 @@ export function SpeechBubbleOverlay({ agent }: SpeechBubbleOverlayProps) {
 
   useEffect(() => {
     if (!agent.speechBubble || dismissed) return;
-    if (agent.status === "speaking") {
+    if (agent.status === "active") {
       setFadeStartAt(null);
       return;
     }
@@ -52,7 +52,7 @@ export function SpeechBubbleOverlay({ agent }: SpeechBubbleOverlayProps) {
   const opacity = useMemo(() => {
     if (dismissed) return 0;
     if (!agent.speechBubble) return 0;
-    if (agent.status === "speaking" || fadeStartAt === null) return 1;
+    if (agent.status === "active" || fadeStartAt === null) return 1;
     const elapsed = now - fadeStartAt;
     return Math.max(0, 1 - elapsed / FADE_DURATION_MS);
   }, [agent.speechBubble, agent.status, dismissed, fadeStartAt, now]);

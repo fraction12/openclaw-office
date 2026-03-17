@@ -39,7 +39,7 @@ export function Sidebar() {
     }
 
     if (filter === "active") {
-      list = list.filter((a) => a.status !== "idle" && a.status !== "offline");
+      list = list.filter((a) => a.status === "active");
     } else if (filter === "idle") {
       list = list.filter((a) => a.status === "idle");
     } else if (filter === "error") {

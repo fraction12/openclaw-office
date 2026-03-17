@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { AppShell } from "@/components/layout/AppShell";
 import { ConsoleLayout } from "@/components/layout/ConsoleLayout";
-import { FloorPlan } from "@/components/office-2d/FloorPlan";
+import { PixiOffice } from "@/pixi/PixiOffice";
 import { AgentsPage } from "@/components/pages/AgentsPage";
 import { ChannelsPage } from "@/components/pages/ChannelsPage";
 import { CronPage } from "@/components/pages/CronPage";
@@ -20,6 +20,7 @@ import { resolveGatewayConnectionConfig } from "@/lib/gateway-url";
 import { updateRuntimeConnectionTarget } from "@/lib/runtime-connection-api";
 import { useResponsive } from "@/hooks/useResponsive";
 import { useAmbient, restoreAmbientSound } from "@/hooks/useAmbient";
+import { useOfficeSimulation } from "@/hooks/useOfficeSimulation";
 import { useOfficeStore } from "@/store";
 
 const Scene3D = lazy(() => import("@/components/office-3d/Scene3D"));
@@ -60,7 +61,7 @@ function OfficeView() {
     >
       {displayMode === "2d" ? (
         <ErrorBoundary name="2D office view" resetKeys={[displayMode]}>
-          <FloorPlan />
+          <PixiOffice />
         </ErrorBoundary>
       ) : (
         <ErrorBoundary name="3D office view" resetKeys={[displayMode]}>
@@ -131,6 +132,7 @@ function ConsoleRouteBoundary({ name, children }: { name: string; children: Reac
 
 export function App() {
   useEffect(() => { restoreAmbientSound(); }, []);
+  useOfficeSimulation();
   const { t } = useTranslation("common");
   const injected = (window as unknown as Record<string, unknown>).__OPENCLAW_CONFIG__ as
     | { gatewayUrl?: string }

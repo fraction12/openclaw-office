@@ -32,6 +32,13 @@ export interface OfficeLayoutConfig {
   zones: ZoneConfig[];
 }
 
+export interface OfficeFrame {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 /**
  * Build the default 4-zone office layout.
  * This matches the original hardcoded OFFICE/ZONES constants.
@@ -63,7 +70,7 @@ export function createDefaultLayout(): OfficeLayoutConfig {
     zones: [
       {
         id: "desk",
-        label: "Offices",
+        label: "Main Office",
         x: officeX,
         y: officeY,
         width: halfW,
@@ -74,7 +81,7 @@ export function createDefaultLayout(): OfficeLayoutConfig {
       },
       {
         id: "meeting",
-        label: "Meeting Zone",
+        label: "Meeting Room",
         x: rightX,
         y: officeY,
         width: halfW,
@@ -85,7 +92,7 @@ export function createDefaultLayout(): OfficeLayoutConfig {
       },
       {
         id: "hotDesk",
-        label: "Sub-agents",
+        label: "Subagent Desks",
         x: officeX,
         y: bottomY,
         width: halfW,
@@ -109,6 +116,17 @@ export function createDefaultLayout(): OfficeLayoutConfig {
   };
 }
 
+export function getOfficeFrame(layout: OfficeLayoutConfig): OfficeFrame {
+  const x = 30;
+  const y = 20;
+  return {
+    x,
+    y,
+    width: layout.svgWidth - 60,
+    height: layout.svgHeight - 40,
+  };
+}
+
 /** Resolve a zone by purpose from a layout config */
 export function getZoneByPurpose(
   layout: OfficeLayoutConfig,
@@ -124,27 +142,44 @@ export function getZoneRect(zone: ZoneConfig): { x: number; y: number; width: nu
 
 /** Compute the corridor entrance point from layout */
 export function getCorridorEntrance(layout: OfficeLayoutConfig): { x: number; y: number } {
-  const lounge = getZoneByPurpose(layout, "lounge");
-  if (!lounge) {
-    return { x: layout.svgWidth / 2, y: layout.svgHeight - 30 };
-  }
-  const officeBottom = 20 + layout.svgHeight - 40;
+  const office = getOfficeFrame(layout);
   return {
-    x: lounge.x + lounge.width / 2,
-    y: officeBottom - 30,
+    x: office.x + office.width / 2,
+    y: office.y + office.height - 30,
   };
 }
 
 /** Compute the corridor center crossing point */
 export function getCorridorCenter(layout: OfficeLayoutConfig): { x: number; y: number } {
-  const officeX = 30;
-  const officeY = 20;
-  const officeWidth = layout.svgWidth - 60;
-  const officeHeight = layout.svgHeight - 40;
+  const office = getOfficeFrame(layout);
   return {
-    x: officeX + officeWidth / 2,
-    y: officeY + officeHeight / 2,
+    x: office.x + office.width / 2,
+    y: office.y + office.height / 2,
   };
+}
+
+export function getZoneDoorPoint(
+  layout: OfficeLayoutConfig,
+  purpose: ZoneConfig["purpose"],
+): { x: number; y: number } {
+  if (purpose === "corridor") {
+    return getCorridorEntrance(layout);
+  }
+
+  const zone = getZoneByPurpose(layout, purpose);
+  if (!zone) {
+    return getCorridorEntrance(layout);
+  }
+
+  const corridorHalf = layout.corridorWidth / 2;
+  switch (purpose) {
+    case "desk":
+    case "meeting":
+      return { x: zone.x + zone.width / 2, y: zone.y + zone.height + corridorHalf };
+    case "hotDesk":
+    case "lounge":
+      return { x: zone.x + zone.width / 2, y: zone.y - corridorHalf };
+  }
 }
 
 /** The current active layout — default singleton, can be replaced */

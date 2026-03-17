@@ -6,9 +6,10 @@ import type {
   ThemeMode,
   VisualAgent,
 } from "@/gateway/types";
-import { CORRIDOR_ENTRANCE, ZONES } from "@/lib/constants";
+import { CORRIDOR_ENTRANCE } from "@/lib/constants";
 import { getAgentDisplayName } from "@/lib/agent-identities";
-import { calculateLoungePositions, allocatePosition, getReservedDeskPosition } from "@/lib/position-allocator";
+import { getIdleZone, isWorkingStatus } from "@/lib/agent-zone-policy";
+import { allocateLoungePosition, allocatePosition } from "@/lib/position-allocator";
 
 enableMapSet();
 
@@ -24,7 +25,7 @@ export const UNCONFIRMED_TIMEOUT_MS = 5_000;
 export const MEETING_GATHERING_THROTTLE_MS = 500;
 
 export function isActiveStatus(status: AgentVisualStatus): boolean {
-  return status === "thinking" || status === "tool_calling" || status === "speaking" || status === "spawning";
+  return isWorkingStatus(status);
 }
 
 export function getInitialChatDockHeight(): number {
@@ -79,14 +80,14 @@ export function createVisualAgent(
       childAgentIds: [],
       zone: "corridor",
       originalPosition: null,
+      originalZone: null,
       movement: null,
       confirmed: false,
       cronLabel: null,
     };
   }
 
-  const reservedDeskPosition = !isSubAgent ? getReservedDeskPosition(id) : null;
-  const position = reservedDeskPosition ?? allocatePosition(id, isSubAgent, occupied);
+  const position = allocateLoungePosition(occupied);
   return {
     id,
     name,
@@ -104,12 +105,45 @@ export function createVisualAgent(
     isPlaceholder: false,
     parentAgentId: null,
     childAgentIds: [],
-    zone: isSubAgent ? "hotDesk" : "desk",
+    zone: getIdleZone(),
     originalPosition: null,
+    originalZone: null,
     movement: null,
     confirmed: true,
     cronLabel: null,
   };
+}
+
+export function getLoungeSeatCount(
+  agents: Map<string, VisualAgent>,
+  maxSubAgents: number,
+  extraSeats = 1,
+): number {
+  const nonPlaceholderAgents = [...agents.values()].filter((agent) => !agent.isPlaceholder).length;
+  return Math.max(maxSubAgents + nonPlaceholderAgents + extraSeats, maxSubAgents, 8);
+}
+
+export function collectOccupiedZonePositions(
+  agents: Map<string, VisualAgent>,
+  zone: AgentZone,
+  excludingAgentId?: string,
+): Set<string> {
+  const occupied = new Set<string>();
+
+  for (const agent of agents.values()) {
+    if (agent.id === excludingAgentId) continue;
+
+    if (agent.zone === zone) {
+      occupied.add(positionKey(agent.position));
+    }
+
+    if (agent.movement?.toZone === zone) {
+      const target = agent.movement.path[agent.movement.path.length - 1];
+      if (target) occupied.add(positionKey(target));
+    }
+  }
+
+  return occupied;
 }
 
 export function isConfirmedMainAgent(agent: VisualAgent | undefined): boolean {
@@ -145,18 +179,15 @@ export function allocateNextPosition(
   maxSubAgents: number,
 ): { x: number; y: number } {
   if (toZone === "lounge") {
-    const loungePositions = calculateLoungePositions(maxSubAgents);
-    const occupied = new Set<string>();
-    for (const a of agents.values()) if (a.zone === "lounge") occupied.add(positionKey(a.position));
-    return loungePositions.find((p) => !occupied.has(positionKey(p))) ?? loungePositions[0] ?? { x: ZONES.lounge.x + 60, y: ZONES.lounge.y + 40 };
+    const occupied = collectOccupiedZonePositions(agents, "lounge");
+    return allocateLoungePosition(occupied, getLoungeSeatCount(agents, maxSubAgents));
   }
 
-  const occupied = new Set<string>();
-  for (const a of agents.values()) if (a.zone === toZone) occupied.add(positionKey(a.position));
+  const occupied = collectOccupiedZonePositions(agents, toZone);
   return allocatePosition(`temp-${Date.now()}`, toZone === "hotDesk", occupied);
 }
 
-export function activateFromLoungePlaceholder(
+export function placeAgentInLounge(
   state: { agents: Map<string, VisualAgent>; maxSubAgents: number },
   agent: VisualAgent,
 ): void {
@@ -175,11 +206,16 @@ export function activateFromLoungePlaceholder(
     return;
   }
 
-  const loungePositions = calculateLoungePositions(state.maxSubAgents);
-  const loungeOccupied = new Set<string>();
-  for (const a of state.agents.values()) if (a.zone === "lounge") loungeOccupied.add(positionKey(a.position));
-  agent.position = loungePositions.find((p) => !loungeOccupied.has(positionKey(p))) ?? loungePositions[0] ?? { x: ZONES.lounge.x + 60, y: ZONES.lounge.y + 40 };
-  agent.zone = "lounge";
+  const loungeOccupied = collectOccupiedZonePositions(state.agents, "lounge", agent.id);
+  agent.position = allocateLoungePosition(loungeOccupied, getLoungeSeatCount(state.agents, state.maxSubAgents));
+  agent.zone = getIdleZone();
+}
+
+export function activateFromLoungePlaceholder(
+  state: { agents: Map<string, VisualAgent>; maxSubAgents: number },
+  agent: VisualAgent,
+): void {
+  placeAgentInLounge(state, agent);
 }
 
 export function isRegisteredMainAgentId(

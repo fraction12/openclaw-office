@@ -5,6 +5,7 @@ import { LINK_TIMEOUT_MS, MEETING_GATHERING_THROTTLE_MS } from "./store-helpers"
 
 export interface CollaborationInternals {
   decayTimer: ReturnType<typeof setInterval> | null;
+  meetingCheckTimer: ReturnType<typeof setInterval> | null;
   meetingGatheringTimer: ReturnType<typeof setTimeout> | null;
   lastMeetingGroupsHash: string;
   clearCollaborationTimers: () => void;
@@ -43,12 +44,15 @@ export const createCollaborationSlice = (
 export function createCollaborationInternals(getStore: () => OfficeStore, setStore: (updater: (state: OfficeStore) => void) => void): CollaborationInternals {
   const internals: CollaborationInternals = {
     decayTimer: null,
+    meetingCheckTimer: null,
     meetingGatheringTimer: null,
     lastMeetingGroupsHash: "",
     clearCollaborationTimers() {
       if (internals.decayTimer) clearInterval(internals.decayTimer);
+      if (internals.meetingCheckTimer) clearInterval(internals.meetingCheckTimer);
       if (internals.meetingGatheringTimer) clearTimeout(internals.meetingGatheringTimer);
       internals.decayTimer = null;
+      internals.meetingCheckTimer = null;
       internals.meetingGatheringTimer = null;
       internals.lastMeetingGroupsHash = "";
     },
@@ -57,8 +61,8 @@ export function createCollaborationInternals(getStore: () => OfficeStore, setSto
       internals.meetingGatheringTimer = setTimeout(() => {
         internals.meetingGatheringTimer = null;
         const state = getStore();
-        const allowList = state.agentToAgentConfig.enabled ? state.agentToAgentConfig.allow : undefined;
-        const groups = detectMeetingGroups(state.links, state.agents, allowList);
+        // Detect meetings from active delegation relationships
+        const groups = detectMeetingGroups(state.agents);
         const hash = JSON.stringify(groups.map((g) => [...g.agentIds].sort()));
         if (hash === internals.lastMeetingGroupsHash) return;
         internals.lastMeetingGroupsHash = hash;
@@ -67,6 +71,7 @@ export function createCollaborationInternals(getStore: () => OfficeStore, setSto
     },
   };
 
+  // Decay collaboration link strength over time
   internals.decayTimer = setInterval(() => {
     const now = Date.now();
     setStore((state) => {
@@ -86,6 +91,12 @@ export function createCollaborationInternals(getStore: () => OfficeStore, setSto
       if (changed) state.globalMetrics = { ...state.globalMetrics };
     });
   }, 1000);
+
+  // Periodically check for delegation-based meetings
+  // This catches meetings even when no new events arrive
+  internals.meetingCheckTimer = setInterval(() => {
+    internals.scheduleMeetingGathering();
+  }, 2000);
 
   return internals;
 }

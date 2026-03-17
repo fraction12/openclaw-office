@@ -1,12 +1,13 @@
-import type { CollaborationLink, VisualAgent } from "@/gateway/types";
+import type { VisualAgent } from "@/gateway/types";
 import { ZONES } from "@/lib/constants";
 import { allocateMeetingPositions } from "@/lib/position-allocator";
 
-const STRENGTH_THRESHOLD = 0.3;
 const MAX_CONCURRENT_MEETINGS = 3;
 
-interface MeetingGroup {
-  sessionKey: string;
+export interface MeetingGroup {
+  /** The parent agent driving this meeting */
+  parentId: string;
+  /** All participants: parent + active sub-agents */
   agentIds: string[];
 }
 
@@ -23,47 +24,42 @@ const MEETING_TABLE_CENTERS = [
   },
 ];
 
+const ACTIVE_STATUSES = new Set(["active"]);
+
 /**
- * Detect collaboration groups that should trigger meeting zone gathering.
- * Groups agents by sessionKey where 2+ agents are collaborating with strength > threshold.
- * When allowList is provided, only agents in the list can participate.
+ * Detect meeting groups from active delegation relationships.
+ *
+ * A meeting forms when a parent agent has one or more active (non-idle,
+ * non-placeholder) sub-agents. The parent and all active children gather
+ * at the meeting table — representing real back-and-forth delegation.
  */
 export function detectMeetingGroups(
-  links: CollaborationLink[],
   agents: Map<string, VisualAgent>,
-  allowList?: string[],
 ): MeetingGroup[] {
-  const allowSet = allowList && allowList.length > 0 ? new Set(allowList) : null;
-  const sessionAgents = new Map<string, Set<string>>();
-
-  for (const link of links) {
-    if (link.strength < STRENGTH_THRESHOLD) {
-      continue;
-    }
-    if (!agents.has(link.sourceId) || !agents.has(link.targetId)) {
-      continue;
-    }
-    if (allowSet && (!allowSet.has(link.sourceId) || !allowSet.has(link.targetId))) {
-      continue;
-    }
-
-    let set = sessionAgents.get(link.sessionKey);
-    if (!set) {
-      set = new Set();
-      sessionAgents.set(link.sessionKey, set);
-    }
-    set.add(link.sourceId);
-    set.add(link.targetId);
-  }
-
   const groups: MeetingGroup[] = [];
-  for (const [sessionKey, agentSet] of sessionAgents) {
-    if (agentSet.size >= 2) {
-      groups.push({ sessionKey, agentIds: Array.from(agentSet) });
-    }
-    if (groups.length >= MAX_CONCURRENT_MEETINGS) {
-      break;
-    }
+
+  for (const agent of agents.values()) {
+    // Only main (non-sub) agents can convene meetings
+    if (agent.isSubAgent || agent.isPlaceholder) continue;
+    if (agent.childAgentIds.length === 0) continue;
+
+    // Find active children
+    const activeChildren = agent.childAgentIds.filter((childId) => {
+      const child = agents.get(childId);
+      if (!child || child.isPlaceholder) return false;
+      // Child must be doing real work
+      return ACTIVE_STATUSES.has(child.status);
+    });
+
+    if (activeChildren.length === 0) continue;
+
+    // Parent + active children form a meeting
+    groups.push({
+      parentId: agent.id,
+      agentIds: [agent.id, ...activeChildren],
+    });
+
+    if (groups.length >= MAX_CONCURRENT_MEETINGS) break;
   }
 
   return groups;
@@ -71,7 +67,6 @@ export function detectMeetingGroups(
 
 /**
  * Calculate seat positions for a meeting group.
- * Returns a map of agentId → meeting position.
  */
 export function calculateMeetingSeats(
   group: MeetingGroup,
@@ -90,7 +85,7 @@ export function calculateMeetingSeats(
 
 /**
  * Apply meeting gathering: move agents to meeting positions and save originals.
- * Called from a store action or effect.
+ * Return agents that are no longer in any active meeting.
  */
 export function applyMeetingGathering(
   agents: Map<string, VisualAgent>,

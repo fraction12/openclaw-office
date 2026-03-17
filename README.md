@@ -1,75 +1,72 @@
 # OpenClaw Office
 
-> A real-time visual dashboard for [OpenClaw](https://github.com/openclaw/openclaw) agents — see what your agents are actually doing.
+> A real-time office-style control surface for OpenClaw agents.
 
-OpenClaw Office renders live agent activity as an isometric virtual office. Agents sit at desks, sub-agents appear at hot desks, state changes animate in real time. It connects to your OpenClaw Gateway via WebSocket and derives everything from observable facts — no simulation, no guesswork.
+OpenClaw Office is the visual monitoring and management frontend for
+[OpenClaw](https://github.com/openclaw/openclaw). It connects to the OpenClaw
+Gateway over WebSocket, derives agent state from observable evidence, and
+renders that state as a live digital office plus a full management console.
 
-Built on a **truth-first architecture**: every visible state maps to either a verifiable gateway fact or an explicit, documented inference rule. When the system is uncertain, it shows uncertainty instead of pretending confidence.
+The current app has three major surfaces:
+
+- Office view: Pixi-powered 2D office plus an alternate React Three Fiber 3D scene
+- Chat dock: bottom-docked agent chat with streaming history and abort controls
+- Console: dashboard, agents, channels, skills, cron, and settings
 
 ![office-2D](./assets/office-2d.png)
 
----
+## What The App Does
 
-## What It Does
+### Office View
 
-### 2D Office
+- Pixi.js 2D office renderer with desks, hot desks, meeting areas, lounge zones, and animated agents
+- React Three Fiber 3D scene driven by the same derived agent state
+- Agent avatars, tool activity, speech bubbles, collaboration links, and timeline panels
+- Mobile-aware behavior that forces the lighter 2D mode on smaller screens
 
-- **SVG floor plan** with desk zones, hot desks, meeting areas, and a lounge
-- **Live agent avatars** with status animations — idle, working, thinking, tool calling, speaking, error, sleeping, stale, disconnected
-- **Sub-agent lifecycle** — sub-agents spawn at the lounge, move to hot desks, and disappear when done
-- **Tool call bubbles** — human-readable descriptions of what agents are doing right now
-- **Confidence indicators** — visual opacity and badges reflect how certain the derived state is
-- **Collaboration lines** showing delegation between agents
+### Control And Operations
 
-### 3D Office
+- Send chat messages to agent sessions and abort running work
+- Inspect agent details, files, tools, skills, channels, and cron bindings
+- Track usage, event history, collaboration, and sub-agent activity
+- Manage local installed skills and browse external skill metadata from ClawHub
 
-- **React Three Fiber scene** with character models and skill holograms
-- Same truth-first state driving a different visual layer
+### Connection Modes
 
-### Sidebar Panels
-
-- **Agent Detail** — status, evidence, derivation reason, confidence, current tool, speech, active clones
-- **Sub-Agent Panel** — live sub-agent list with kill controls
-- **Cron Panel** — view schedules, enable/disable, run now
-- **Event Timeline** — filterable by time range (5m/15m/1h/6h/all) and event type (lifecycle/tool/assistant/error)
-- **Metrics** — token usage, cost breakdown, activity heatmaps, network graphs
-- **Quick Settings** — connection status, ambient sound toggle, console shortcuts
-
-### Control Plane
-
-Send tasks to agents, abort running sessions, manage crons, and kill sub-agents — all from the office sidebar without switching to the console.
-
-### Console
-
-Full management interface: Dashboard, Agents, Channels, Skills, Cron, Settings (providers, appearance, gateway, developer).
+- Local Gateway mode via same-origin `/gateway-ws`
+- Remote Gateway mode via the same proxy path, with the browser still talking to the Office server
+- Token loading from `VITE_GATEWAY_TOKEN`, `OPENCLAW_GATEWAY_TOKEN`, or detected OpenClaw config files depending on how the app is started
 
 ![console-dashboard](./assets/console-dashboard.png)
 
----
-
 ## Architecture
 
+The app is built around an evidence-first state pipeline:
+
+```text
+Gateway events/RPC
+  -> ws-client / rpc-client
+  -> adapter-provider / ws-adapter
+  -> event-parser
+  -> evidence-store
+  -> state-deriver
+  -> Zustand slices
+  -> Pixi office / React panels / R3F scene
 ```
-Gateway  ──WebSocket──>  ws-client  ──>  event-parser  ──>  evidence-store  ──>  state-deriver  ──>  office-store  ──>  React
-                                                                                       │
-                                                                              confidence + derivation
-                                                                              reason flow to UI
-```
 
-**Evidence-based state derivation:**
+What matters in practice:
 
-1. Gateway WebSocket events and HTTP session refreshes produce per-agent evidence (lifecycle, tool calls, speech, errors, timestamps)
-2. A deterministic derivation function computes canonical state from that evidence — WS lifecycle first, then WS activity, then HTTP corroboration, then staleness/time-of-day defaults
-3. Confidence scores flow through to visuals — high-confidence states render solid, uncertain states show visual indicators
-4. The rendering layer is a pure consumer of derived state, not a truth source
+1. WebSocket frames are the primary real-time source.
+2. Parsed events update per-agent evidence rather than directly mutating UI truth.
+3. A deterministic derivation step computes visible status, confidence, tool text, and speech.
+4. Rendering layers consume derived state. They are not the source of truth.
 
-This replaced an earlier architecture where behavior smoothing and multiple competing state systems caused lag and contradictions.
-
----
+This repo also contains older SVG-based office components under `src/components/office-2d/`.
+They still exist, but the main 2D office route currently uses the Pixi renderer.
 
 ## Quick Start
 
-### Run without cloning
+### Run The Packaged App
 
 ```bash
 npx @ww-ai-lab/openclaw-office
@@ -79,112 +76,152 @@ npm install -g @ww-ai-lab/openclaw-office
 openclaw-office
 ```
 
-The Gateway auth token is auto-detected from `~/.openclaw/openclaw.json`. Override with `--token <token>` or `OPENCLAW_GATEWAY_TOKEN=<token>`.
-
-### CLI Options
+CLI options:
 
 | Flag | Description | Default |
-|------|-------------|---------|
-| `-t, --token <token>` | Gateway auth token | auto-detected |
+| --- | --- | --- |
+| `-t, --token <token>` | Gateway auth token | auto-detected when possible |
 | `-g, --gateway <url>` | Gateway WebSocket URL | `ws://localhost:18789` |
-| `-p, --port <port>` | Server port | `5180` |
+| `-p, --port <port>` | Office server port | `5180` |
 | `--host <host>` | Bind address | `0.0.0.0` |
+| `-h, --help` | Show help | — |
 
----
+Gateway URL resolution order:
+
+1. `--gateway`
+2. `OPENCLAW_GATEWAY_URL`
+3. `~/.openclaw/openclaw-office.json`
+4. `ws://localhost:18789`
+
+Token resolution order:
+
+1. `--token`
+2. `OPENCLAW_GATEWAY_TOKEN`
+3. `~/.openclaw/openclaw.json`
+4. `~/.clawdbot/clawdbot.json`
+
+If the Gateway URL includes `?token=...`, Office extracts that token and strips it from the upstream URL before connecting.
 
 ## Development
 
 ### Prerequisites
 
-- **Node.js 22+**
-- **pnpm**
-- **[OpenClaw](https://github.com/openclaw/openclaw)** installed and running
+- Node.js 22+
+- `pnpm` for the standard workflow
+- A running OpenClaw Gateway for real integration, or `VITE_MOCK=true` for UI-only work
 
-### Setup
+### Install
 
 ```bash
 pnpm install
+```
 
-# Configure gateway token
+### Configure A Real Gateway
+
+Get the token:
+
+```bash
+openclaw config get gateway.auth.token
+```
+
+Then create `.env.local`:
+
+```bash
 cat > .env.local << 'EOF'
 VITE_GATEWAY_TOKEN=<your-token>
 EOF
-
-# Get your token:
-# openclaw config get gateway.auth.token
-
-# Required: bypass device auth for web clients
-openclaw config set gateway.controlUi.dangerouslyDisableDeviceAuth true
-# Restart gateway after this change
-
-pnpm dev
-# → http://localhost:5180
 ```
 
-### Environment Variables
+If you need a non-default upstream in dev, add:
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `VITE_GATEWAY_TOKEN` | Yes | — | Gateway auth token |
-| `VITE_GATEWAY_URL` | No | `ws://localhost:18789` | Dev proxy upstream |
-| `VITE_MOCK` | No | `false` | Mock mode (no gateway needed) |
+```bash
+VITE_GATEWAY_URL=ws://your-gateway-host:18789
+```
+
+OpenClaw Gateway 2026.2.15+ requires device identity for many clients. The web UI needs the documented bypass:
+
+```bash
+openclaw config set gateway.controlUi.dangerouslyDisableDeviceAuth true
+```
+
+Restart the Gateway after that change.
+
+### Start The App
+
+```bash
+pnpm dev
+```
+
+The browser connects to `/gateway-ws`. In dev, Vite proxies that path to the configured upstream Gateway. In the packaged server, the bundled Node server performs that same proxy role.
+
+### Mock Mode
+
+```bash
+VITE_MOCK=true pnpm dev
+```
+
+This enables the mock adapter and simulated agent activity without a live Gateway.
 
 ### Commands
 
 ```bash
-pnpm dev          # Dev server (port 5180)
-pnpm build        # Production build
-pnpm test         # Run tests
-pnpm typecheck    # TypeScript check
-pnpm lint         # Oxlint
-pnpm format       # Oxfmt
+pnpm dev
+pnpm build
+pnpm test
+pnpm test:watch
+pnpm typecheck
+pnpm lint
+pnpm format
+pnpm check
 ```
 
----
+Notes:
+
+- `pnpm` is the canonical package manager for this repo, but `npm run <script>` also works when dependencies are already installed.
+- `lint` and `format` call `oxlint` and `oxfmt` binaries directly. If those commands are not on your `PATH`, those scripts will fail even if the repo has been installed.
 
 ## Tech Stack
 
 | Layer | Technology |
-|-------|-----------|
+| --- | --- |
 | Build | Vite 6 |
 | UI | React 19 |
-| 2D | SVG + CSS Animations |
-| 3D | React Three Fiber + drei |
+| 2D | Pixi.js and legacy SVG components |
+| 3D | React Three Fiber, drei, postprocessing |
 | State | Zustand 5 + Immer |
 | Styling | Tailwind CSS 4 |
 | Routing | React Router 7 |
 | Charts | Recharts |
-| i18n | i18next |
-| Real-time | Native WebSocket |
-
----
+| i18n | i18next + react-i18next |
+| Realtime | Native WebSocket API |
 
 ## Project Structure
 
-```
+```text
 src/
-├── gateway/          # WebSocket client, RPC, event parsing, adapters
-├── store/            # Zustand stores — evidence, entities, spatial, events, orchestration
-├── lib/              # State deriver, agent identities, tool display, ambient, zone config
-├── hooks/            # Gateway connection, ambient, polling, sidebar layout
+├── App.tsx, main.tsx            # bootstrapping, routing, connection setup
+├── gateway/                     # ws/rpc clients, adapters, event parsing, ClawHub client
+├── store/                       # Zustand slices, evidence store, event orchestration
+├── pixi/                        # main 2D office renderer and engine
 ├── components/
-│   ├── office-2d/    # SVG floor plan, avatars, desk units
-│   ├── office-3d/    # R3F 3D scene
-│   ├── panels/       # Agent detail, crons, sub-agents, metrics, timeline, settings
-│   ├── layout/       # App shell, sidebar, top bar
-│   ├── console/      # Console management pages
-│   ├── chat/         # Chat dock
-│   └── shared/       # Error boundaries, avatars, common components
-└── styles/           # Global styles + ambient CSS
+│   ├── office-2d/               # legacy SVG office pieces
+│   ├── office-3d/               # R3F scene
+│   ├── panels/                  # office-side panels
+│   ├── chat/                    # chat dock
+│   ├── console/                 # console feature components
+│   ├── layout/                  # shells, sidebar, top bar
+│   └── shared/                  # shared UI
+├── hooks/                       # gateway, polling, responsive, ambient hooks
+├── lib/                         # derivation, URLs, persistence, view helpers
+└── i18n/                        # zh/en resources
 ```
-
----
 
 ## Security Note
 
-OpenClaw Office is designed for **local or private network use** (localhost, Tailscale, LAN). The `dangerouslyDisableDeviceAuth` bypass is required because web browsers cannot provide Ed25519 device signatures. Do not expose to the public internet without additional authentication.
-
----
+OpenClaw Office is designed for local or private-network use. The browser-facing
+token endpoint and the `dangerouslyDisableDeviceAuth` Gateway setting both assume
+you control the environment around the UI. Do not expose this directly to the
+public internet without an additional authentication layer.
 
 ## License
 

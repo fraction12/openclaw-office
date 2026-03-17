@@ -1,6 +1,6 @@
 import type { AgentVisualStatus } from "@/gateway/types";
 
-export type AgentStatus = Exclude<AgentVisualStatus, "spawning" | "offline">;
+export type AgentStatus = AgentVisualStatus;
 
 export interface AgentEvidence {
   agentId: string;

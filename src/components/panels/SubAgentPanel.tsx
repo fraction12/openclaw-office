@@ -85,7 +85,7 @@ export function SubAgentPanel() {
               )}
               <div className="flex items-center gap-2 text-[10px] text-gray-400">
                 <span>{runtime}</span>
-                {sub.runId && (sub.status === "thinking" || sub.status === "tool_calling" || sub.status === "speaking") && (
+                {sub.runId && sub.status === "active" && (
                   <button
                     onClick={(e) => { e.stopPropagation(); handleKill(sub.runId!); }}
                     className="rounded bg-red-100 px-1.5 py-0.5 text-[9px] font-medium text-red-600 hover:bg-red-200 dark:bg-red-900/40 dark:text-red-400"

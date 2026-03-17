@@ -46,24 +46,16 @@
   },
   "agent": {
     "statusLabels": {
+      "active": "Active",
       "idle": "Idle",
-      "thinking": "Thinking",
-      "tool_calling": "Tool Call",
-      "speaking": "Speaking",
-      "spawning": "Spawning",
-      "error": "Error",
-      "offline": "Offline",
-      "sleeping": "Sleeping",
-      "stale": "Stale",
-      "unknown": "Unknown",
-      "disconnected": "Disconnected"
+      "error": "Error"
     }
   },
   "zones": {
-    "desk": "Offices",
-    "meeting": "Meeting Zone",
-    "hotDesk": "Sub-agents",
-    "lounge": "Lounge Zone"
+    "desk": "Main Office",
+    "meeting": "Meeting Room",
+    "hotDesk": "Subagent Desks",
+    "lounge": "Lounge"
   },
   "errors": {
     "notConnected": "Not connected to Gateway",

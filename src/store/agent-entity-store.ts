@@ -1,15 +1,17 @@
 import type { StateCreator } from "zustand";
 import type { OfficeStore, SubAgentInfo, VisualAgent } from "@/gateway/types";
+import { getPreferredZone } from "@/lib/agent-zone-policy";
 import { computeMetrics } from "./metrics-reducer";
 import {
-  activateFromLoungePlaceholder,
+  getLoungeSeatCount,
   buildInitialAgents,
   createVisualAgent,
   nextPlaceholderIndex,
+  placeAgentInLounge,
   positionKey,
   REMOVED_IDS_TTL_MS,
 } from "./store-helpers";
-import { calculateLoungePositions } from "@/lib/position-allocator";
+import { allocateLoungePosition } from "@/lib/position-allocator";
 import { evidenceStore } from "./evidence-store";
 
 export interface EntityStoreInternals {
@@ -94,7 +96,7 @@ export const createEntitySlice = (
         existingAgent.isSubAgent = true;
         existingAgent.parentAgentId = parentId;
         existingAgent.name = info.label || existingAgent.name;
-        activateFromLoungePlaceholder(state, existingAgent);
+        placeAgentInLounge(state, existingAgent);
       } else if (existingAgent && existingAgent.confirmed) {
         const wasMisclassified = !existingAgent.isSubAgent;
         existingAgent.isSubAgent = true;
@@ -102,7 +104,7 @@ export const createEntitySlice = (
         existingAgent.name = info.label || existingAgent.name;
         if (wasMisclassified) {
           existingAgent.movement = null;
-          activateFromLoungePlaceholder(state, existingAgent);
+          placeAgentInLounge(state, existingAgent);
         }
       } else {
         let placeholder: VisualAgent | undefined;
@@ -132,7 +134,6 @@ export const createEntitySlice = (
           const agent = createVisualAgent(info.agentId, info.label || `Sub-${info.agentId.slice(0, 6)}`, true, occupied);
           agent.parentAgentId = parentId;
           agent.runId = info.sessionKey;
-          agent.zone = "hotDesk";
           state.agents.set(info.agentId, agent);
         }
       }
@@ -152,18 +153,23 @@ export const createEntitySlice = (
     });
 
     const agent = get().agents.get(info.agentId);
-    if (agent && agent.zone !== "hotDesk" && agent.zone !== "meeting") get().startMovement(info.agentId, "hotDesk");
+    if (agent && agent.zone !== "meeting" && !agent.movement) {
+      const targetZone = getPreferredZone(agent);
+      if (targetZone !== agent.zone) get().startMovement(info.agentId, targetZone);
+    }
   },
 
   removeSubAgent: (subAgentId: string) => {
     get().removeAgent(subAgentId);
     set((state) => {
-      const loungePositions = calculateLoungePositions(state.maxSubAgents);
       const loungeOccupied = new Set<string>();
       for (const a of state.agents.values()) {
         if (a.zone === "lounge") loungeOccupied.add(positionKey(a.position));
       }
-      const freeLounge = loungePositions.find((p) => !loungeOccupied.has(positionKey(p)));
+      const freeLounge = allocateLoungePosition(
+        loungeOccupied,
+        getLoungeSeatCount(state.agents, state.maxSubAgents),
+      );
       if (freeLounge) {
         const phIdx = nextPlaceholderIndex(state.agents);
         state.agents.set(`placeholder-${phIdx}`, {
@@ -185,6 +191,7 @@ export const createEntitySlice = (
           childAgentIds: [],
           zone: "lounge",
           originalPosition: null,
+          originalZone: null,
           movement: null,
           confirmed: true,
           cronLabel: null,
@@ -207,17 +214,17 @@ export const createEntitySlice = (
       if (role === "sub") {
         agent.isSubAgent = true;
         if (parentId) agent.parentAgentId = parentId;
-        activateFromLoungePlaceholder(state, agent);
+        placeAgentInLounge(state, agent);
       } else {
-        const occupied = new Set<string>();
-        for (const a of state.agents.values()) if (a.zone === "desk" && a.id !== agentId) occupied.add(positionKey(a.position));
-        agent.position = createVisualAgent(agentId, agent.name, false, occupied).position;
-        agent.zone = "desk";
+        placeAgentInLounge(state, agent);
       }
       state.globalMetrics = computeMetrics(state.agents, state.globalMetrics);
     });
     const agent = get().agents.get(agentId);
-    if (agent && !agent.movement) get().startMovement(agentId, role === "sub" ? "hotDesk" : "desk");
+    if (agent && !agent.movement) {
+      const targetZone = getPreferredZone(agent);
+      if (targetZone !== agent.zone) get().startMovement(agentId, targetZone);
+    }
   },
 
   initAgents: (summaries) => {

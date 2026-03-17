@@ -66,9 +66,11 @@ export class GatewayWsClient {
     this.shutdownReceived = true;
     this.clearReconnectTimer();
     if (this.ws) {
-      this.ws.removeEventListener("close", this.handleClose);
-      this.ws.close();
+      const sock = this.ws;
       this.ws = null;
+      sock.removeEventListener("close", this.handleClose);
+      // Silently close — avoid browser console error when socket hasn't opened yet
+      try { sock.close(); } catch { /* already closed or never opened */ }
     }
     this.setStatus("disconnected");
   }
@@ -150,6 +152,9 @@ export class GatewayWsClient {
   }
 
   private handleEvent(frame: GatewayEventFrame): void {
+    if (import.meta.env.DEV) {
+      console.log("[WS] Event:", frame.event);
+    }
     if (frame.event === "connect.challenge") {
       this.sendConnect();
       return;
@@ -182,6 +187,9 @@ export class GatewayWsClient {
   }
 
   private handleResponse(frame: GatewayResponseFrame): void {
+    if (import.meta.env.DEV) {
+      console.log("[WS] Response:", frame.id, "ok:", frame.ok, "type:", frame.ok ? (frame as { payload?: { type?: string } }).payload?.type : "error", "handler:", this.responseHandlers.has(frame.id));
+    }
     const handler = this.responseHandlers.get(frame.id);
     if (handler) {
       this.responseHandlers.delete(frame.id);
@@ -189,10 +197,10 @@ export class GatewayWsClient {
       return;
     }
 
-    // connect response (may not have a matching id)
-    if (frame.ok && (frame.payload as HelloOk)?.type === "hello-ok") {
-      this.handleConnectSuccess(frame.payload as HelloOk);
-    } else if (!frame.ok) {
+    // connect response — upstream may send type as "hello-ok" or boolean true
+    if (frame.ok) {
+      this.handleConnectSuccess((frame.payload ?? {}) as HelloOk);
+    } else {
       this.setStatus("error", frame.error.message);
     }
   }
@@ -258,6 +266,9 @@ export class GatewayWsClient {
   }
 
   private setStatus(status: ConnectionStatus, error?: string): void {
+    if (import.meta.env.DEV) {
+      console.log("[WS] Status:", this.status, "→", status, error ?? "");
+    }
     this.status = status;
     for (const handler of this.statusHandlers) {
       handler(status, error);

@@ -186,12 +186,15 @@ function proxyGatewayUpgrade(
 
   const upstreamUrl = toUpstreamHttpUrl(gatewayTarget);
   const requestImpl = upstreamUrl.protocol === "https:" ? httpsRequest : httpRequest;
+  // Forward the browser's original Origin so the gateway can validate
+  // it against allowedOrigins (e.g. http://localhost:5180).
+  const browserOrigin = req.headers.origin;
   const upstreamReq = requestImpl(upstreamUrl, {
     method: "GET",
     headers: {
       ...req.headers,
       host: upstreamUrl.host,
-      origin: toGatewayOrigin(gatewayTarget),
+      origin: browserOrigin || toGatewayOrigin(gatewayTarget),
       connection: "Upgrade",
       upgrade: "websocket",
     },

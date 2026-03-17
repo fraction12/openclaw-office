@@ -30,9 +30,7 @@ const MEETING_TABLE_CENTERS_2D = [
 
 function MeetingLabels() {
   const agents = useOfficeStore((s) => s.agents);
-  const links = useOfficeStore((s) => s.links);
-
-  const groups = useMemo(() => detectMeetingGroups(links, agents), [links, agents]);
+  const groups = useMemo(() => detectMeetingGroups(agents), [agents]);
 
   if (groups.length === 0) {
     return null;
@@ -47,7 +45,7 @@ function MeetingLabels() {
 
         return (
           <Html
-            key={group.sessionKey}
+            key={group.parentId}
             position={[cx, 2, cz]}
             center
             transform={false}

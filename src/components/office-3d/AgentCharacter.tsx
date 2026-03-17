@@ -41,16 +41,14 @@ export function AgentCharacter({ agent }: AgentCharacterProps) {
 
   const isSelected = selectedAgentId === agent.id;
   const isSubAgent = agent.isSubAgent;
-  const isOffline = agent.status === "offline";
   const isPlaceholder = agent.isPlaceholder;
   const isUnconfirmed = !agent.confirmed;
   const isWalking = agent.movement !== null;
-  const tickMovement = useOfficeStore((s) => s.tickMovement);
   const statusColor = STATUS_COLORS[agent.status] ?? "#6b7280";
   const confidence = getAgentConfidence(agent);
   const confidenceStyle = getConfidenceVisualStyle(confidence);
   const baseColor = isSubAgent ? "#60a5fa" : generateAvatar3dColor(agent.id);
-  const isDesaturated = agent.status === "stale" || agent.status === "unknown" || agent.status === "disconnected" || isOffline;
+  const isDesaturated = false;
   const displayColor = isDesaturated || isPlaceholder || isUnconfirmed ? "#6b7280" : baseColor;
   const bodyOpacity = isPlaceholder ? 0.25 : isUnconfirmed ? 0.35 : Math.min(confidenceStyle.opacity, isSubAgent ? 0.78 : 1);
   const indicator = getStatusIndicator(agent.status);
@@ -59,7 +57,7 @@ export function AgentCharacter({ agent }: AgentCharacterProps) {
       agent.name,
       `${t(`agent.statusLabels.${agent.status}`)} · ${Math.round(confidence * 100)}%`,
       (agent.statusReason ?? agent.derivationReason) ? `Reason: ${agent.statusReason ?? agent.derivationReason}` : null,
-      agent.status === "tool_calling" && agent.currentTool ? `Tool: ${agent.currentTool.name}` : null,
+      agent.status === "active" && agent.currentTool ? `Tool: ${agent.currentTool.name}` : null,
       `Last active: ${formatLastActive(agent.lastActiveAt)}`,
     ].filter(Boolean) as string[],
     [agent, confidence, t],
@@ -82,7 +80,6 @@ export function AgentCharacter({ agent }: AgentCharacterProps) {
     }
 
     if (isWalking) {
-      tickMovement(agent.id, delta);
       const curAgent = useOfficeStore.getState().agents.get(agent.id);
       if (curAgent) {
         const [wx, , wz] = position2dTo3d(curAgent.position);
@@ -103,19 +100,18 @@ export function AgentCharacter({ agent }: AgentCharacterProps) {
       pos.z += (targetZ - pos.z) * lerpFactor;
 
       if (bodyRef.current) {
-        const sleepingBob = agent.status === "sleeping" ? Math.sin(time * 1.4) * 0.01 : 0;
-        bodyRef.current.position.y = Math.sin(time * 2) * 0.02 + sleepingBob;
-        bodyRef.current.rotation.z = agent.status === "sleeping" ? -0.12 + Math.sin(time * 1.2) * 0.02 : 0;
+        bodyRef.current.position.y = Math.sin(time * 2) * 0.02;
+        bodyRef.current.rotation.z = 0;
       }
     }
 
-    const emissivePulse = agent.status === "sleeping" ? 0.1 + Math.sin(time * 1.6) * 0.08 : 0;
+    const emissivePulse = agent.status === "active" ? 0.08 + Math.sin(time * 1.6) * 0.06 : 0;
     const hoverPulse = isSubAgent && !isPlaceholder ? 1.0 + Math.sin(time * 3) * 0.05 : 1;
     const scale = hoverPulse * ringScale;
     groupRef.current.scale.setScalar(scale);
 
     const ring = groupRef.current.getObjectByName("status-ring");
-    if (ring) ring.rotation.z += delta * (agent.status === "thinking" ? 0.8 : agent.status === "tool_calling" ? 1.4 : 0.2);
+    if (ring) ring.rotation.z += delta * (agent.status === "active" ? 1 : 0.2);
 
     const glow = groupRef.current.getObjectByName("status-glow");
     if (glow) glow.scale.setScalar(1 + emissivePulse);
@@ -173,26 +169,26 @@ export function AgentCharacter({ agent }: AgentCharacterProps) {
         <meshStandardMaterial
           color={statusColor}
           emissive={statusColor}
-          emissiveIntensity={confidenceStyle.emissiveIntensity + (agent.status === "sleeping" ? 0.12 : 0)}
+          emissiveIntensity={confidenceStyle.emissiveIntensity + (agent.status === "active" ? 0.12 : 0)}
           transparent
           opacity={confidenceStyle.ringOpacity}
         />
       </mesh>
 
-      {(agent.status === "stale" || agent.status === "unknown" || agent.status === "disconnected") && (
+      {agent.status === "error" && (
         <mesh name="status-glow" position={[0, 0.012, 0]} rotation={[-Math.PI / 2, 0, 0]}>
           <ringGeometry args={[0.33, 0.35, 32]} />
           <meshBasicMaterial color={statusColor} transparent opacity={0.18} />
         </mesh>
       )}
 
-      {agent.status === "thinking" && <ThinkingIndicator />}
-      {agent.status === "tool_calling" && agent.currentTool && (
+      {agent.status === "active" && !agent.currentTool && <ThinkingIndicator />}
+      {agent.status === "active" && agent.currentTool && (
         <SkillHologram tool={{ name: agent.currentTool.name }} position={[0.3, 0.5, -0.3]} />
       )}
       {agent.status === "error" && <ErrorIndicator />}
 
-      {agent.status === "speaking" && agent.speechBubble && (
+      {agent.status === "active" && agent.speechBubble && (
         <Html position={[0, 1.0, 0]} center transform={false}>
           <div className="flex items-center justify-center">
             <div className="relative flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500 text-white shadow-md">

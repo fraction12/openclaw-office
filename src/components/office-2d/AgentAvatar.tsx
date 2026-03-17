@@ -26,7 +26,6 @@ export const AgentAvatar = memo(function AgentAvatar({ agent }: AgentAvatarProps
   const { t } = useTranslation("common");
   const selectedAgentId = useOfficeStore((s) => s.selectedAgentId);
   const selectAgent = useOfficeStore((s) => s.selectAgent);
-  const tickMovement = useOfficeStore((s) => s.tickMovement);
   const theme = useOfficeStore((s) => s.theme);
   const [hovered, setHovered] = useState(false);
   const gRef = useRef<SVGGElement>(null);
@@ -48,7 +47,7 @@ export const AgentAvatar = memo(function AgentAvatar({ agent }: AgentAvatarProps
   const confidenceStyle = getConfidenceVisualStyle(confidence);
   const stateOpacity = isPlaceholder ? 0.3 : isUnconfirmed ? 0.5 : confidenceStyle.opacity;
   const badgeText = getStatusIndicator(agent.status);
-  const bodyDesaturated = agent.status === "stale" || agent.status === "unknown" || agent.status === "disconnected";
+  const bodyDesaturated = false;
   const fullDisplayName = getAgentDisplayName(agent.id, agent.name);
   const displayName =
     fullDisplayName.length > AVATAR.nameLabelMaxChars
@@ -59,7 +58,7 @@ export const AgentAvatar = memo(function AgentAvatar({ agent }: AgentAvatarProps
     fullDisplayName,
     `${t(`agent.statusLabels.${agent.status}`)} · ${Math.round(confidence * 100)}%`,
     (agent.statusReason ?? agent.derivationReason) ? `Reason: ${agent.statusReason ?? agent.derivationReason}` : null,
-    agent.status === "tool_calling" && agent.currentTool ? `${getToolIcon(agent.currentTool.name)} ${getToolPillLabel(agent.currentTool)}` : null,
+    agent.status === "active" && agent.currentTool ? `${getToolIcon(agent.currentTool.name)} ${getToolPillLabel(agent.currentTool)}` : null,
     `Last active: ${formatLastActive(agent.lastActiveAt)}`,
   ].filter(Boolean) as string[];
 
@@ -69,10 +68,7 @@ export const AgentAvatar = memo(function AgentAvatar({ agent }: AgentAvatarProps
   const animate = useCallback(
     (time: number) => {
       if (!gRef.current) return;
-      const delta = lastTimeRef.current ? (time - lastTimeRef.current) / 1000 : 0.016;
       lastTimeRef.current = time;
-
-      tickMovement(agentIdRef.current, delta);
 
       const state = useOfficeStore.getState();
       const a = state.agents.get(agentIdRef.current);
@@ -98,7 +94,7 @@ export const AgentAvatar = memo(function AgentAvatar({ agent }: AgentAvatarProps
 
       if (a.movement) rafRef.current = requestAnimationFrame(animate);
     },
-    [tickMovement],
+    [],
   );
 
   useEffect(() => {
@@ -164,14 +160,14 @@ export const AgentAvatar = memo(function AgentAvatar({ agent }: AgentAvatarProps
         </g>
       )}
 
-      {agent.status === "thinking" && <ThinkingDots r={r} />}
-      {agent.status === "speaking" && <SpeakingIndicator r={r} />}
+      {agent.status === "active" && !agent.currentTool && <ThinkingDots r={r} />}
+      
 
       {badgeText && (
         <StatusBadge r={r} color={statusColor} text={badgeText} isDark={isDark} />
       )}
 
-      {agent.status === "tool_calling" && agent.currentTool && (
+      {agent.status === "active" && agent.currentTool && (
         <foreignObject x={-75} y={r + 2} width={150} height={22} style={{ pointerEvents: "none" }}>
           <div style={{ display: "flex", justifyContent: "center" }}>
             <span
@@ -197,7 +193,7 @@ export const AgentAvatar = memo(function AgentAvatar({ agent }: AgentAvatarProps
 
       <foreignObject
         x={-60}
-        y={r + (agent.status === "tool_calling" && agent.currentTool ? 18 : 4)}
+        y={r + (agent.status === "active" && agent.currentTool ? 18 : 4)}
         width={120}
         height={22}
         style={{ pointerEvents: "none" }}
@@ -222,8 +218,8 @@ export const AgentAvatar = memo(function AgentAvatar({ agent }: AgentAvatarProps
         </div>
       </foreignObject>
 
-      {agent.cronLabel && (agent.status === "thinking" || agent.status === "tool_calling" || agent.status === "speaking") && (
-        <foreignObject x={-60} y={r + (agent.status === "tool_calling" && agent.currentTool ? 36 : 22)} width={120} height={18} style={{ pointerEvents: "none" }}>
+      {agent.cronLabel && agent.status === "active" && (
+        <foreignObject x={-60} y={r + (agent.status === "active" && agent.currentTool ? 36 : 22)} width={120} height={18} style={{ pointerEvents: "none" }}>
           <div style={{ display: "flex", justifyContent: "center" }}>
             <span
               style={{
@@ -324,25 +320,6 @@ function ThinkingDots({ r }: { r: number }) {
           style={{ animation: `thinking-dots 1.2s ease-in-out ${i * 0.15}s infinite` }}
         />
       ))}
-    </g>
-  );
-}
-
-function SpeakingIndicator({ r }: { r: number }) {
-  return (
-    <g transform={`translate(${r * 0.55}, ${-r * 0.75})`}>
-      <circle r={7} fill="#10B981" opacity={0.9}>
-        <animate attributeName="r" values="6;8;6" dur="1.5s" repeatCount="indefinite" />
-        <animate attributeName="opacity" values="0.9;0.5;0.9" dur="1.5s" repeatCount="indefinite" />
-      </circle>
-      <g transform="translate(-4.5,-4.5) scale(0.45)">
-        <path
-          fill="#fff"
-          fillRule="evenodd"
-          d="M3.43 2.524A41.29 41.29 0 0110 2c2.236 0 4.43.18 6.57.524 1.437.231 2.43 1.49 2.43 2.902v5.148c0 1.413-.993 2.67-2.43 2.902a41.102 41.102 0 01-3.55.414c-.28.02-.521.18-.643.413l-1.712 3.293a.75.75 0 01-1.33 0l-1.713-3.293a.783.783 0 00-.642-.413 41.108 41.108 0 01-3.55-.414C1.993 13.245 1 11.986 1 10.574V5.426c0-1.413.993-2.67 2.43-2.902z"
-          clipRule="evenodd"
-        />
-      </g>
     </g>
   );
 }

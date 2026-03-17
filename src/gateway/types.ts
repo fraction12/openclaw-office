@@ -103,18 +103,7 @@ export interface AgentEventPayload {
 
 // --- Visual status ---
 
-export type AgentVisualStatus =
-  | "idle"
-  | "thinking"
-  | "tool_calling"
-  | "speaking"
-  | "spawning"
-  | "error"
-  | "offline"
-  | "sleeping"
-  | "stale"
-  | "unknown"
-  | "disconnected";
+export type AgentVisualStatus = "active" | "idle" | "error";
 
 export interface ToolInfo {
   name: string;
@@ -161,6 +150,7 @@ export interface VisualAgent {
   childAgentIds: string[];
   zone: AgentZone;
   originalPosition: { x: number; y: number } | null;
+  originalZone: AgentZone | null;
   movement: MovementState | null;
   confirmed: boolean;
   /** When a session originates from a cron, stores the cron name for display. */
@@ -294,6 +284,7 @@ export interface OfficeStore {
   // Walking animation
   startMovement: (agentId: string, toZone: AgentZone, targetPos?: { x: number; y: number }) => void;
   tickMovement: (agentId: string, deltaTime: number) => void;
+  tickMovements: (deltaTime: number) => void;
   completeMovement: (agentId: string) => void;
 
   // Agent confirmation (unconfirmed → confirmed)

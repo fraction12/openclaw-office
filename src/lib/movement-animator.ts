@@ -1,38 +1,21 @@
-import { OFFICE, ZONES, CORRIDOR_ENTRANCE } from "./constants";
+import { CORRIDOR_ENTRANCE } from "./constants";
 import type { AgentZone } from "@/gateway/types";
+import { getActiveLayout, getCorridorCenter, getZoneDoorPoint as getLayoutZoneDoorPoint } from "./zone-config";
 
 export const WALK_SPEED_SVG = 120;
 export const MIN_WALK_DURATION = 1.5;
 
-const corridorW = OFFICE.corridorWidth;
-const halfW = (OFFICE.width - corridorW) / 2;
-const halfH = (OFFICE.height - corridorW) / 2;
-
-const corridorCenter = {
-  x: OFFICE.x + halfW + corridorW / 2,
-  y: OFFICE.y + halfH + corridorW / 2,
-};
+const layout = getActiveLayout();
+const corridorCenter = getCorridorCenter(layout);
 
 /**
  * Door points: where each zone connects to the corridor (center of zone's corridor edge).
  */
 const DOOR_POINTS: Record<AgentZone, { x: number; y: number }> = {
-  desk: {
-    x: OFFICE.x + halfW / 2,
-    y: OFFICE.y + halfH + corridorW / 2,
-  },
-  meeting: {
-    x: OFFICE.x + halfW + corridorW + halfW / 2,
-    y: OFFICE.y + halfH + corridorW / 2,
-  },
-  hotDesk: {
-    x: OFFICE.x + halfW / 2,
-    y: OFFICE.y + halfH + corridorW / 2,
-  },
-  lounge: {
-    x: OFFICE.x + halfW + corridorW + halfW / 2,
-    y: OFFICE.y + halfH + corridorW / 2,
-  },
+  desk: getLayoutZoneDoorPoint(layout, "desk"),
+  meeting: getLayoutZoneDoorPoint(layout, "meeting"),
+  hotDesk: getLayoutZoneDoorPoint(layout, "hotDesk"),
+  lounge: getLayoutZoneDoorPoint(layout, "lounge"),
   corridor: { ...CORRIDOR_ENTRANCE },
 };
 
@@ -44,22 +27,7 @@ const DOOR_POINTS: Record<AgentZone, { x: number; y: number }> = {
  * lounge (bottom-right) → top edge & left edge
  */
 function getZoneDoorPoint(zone: AgentZone): { x: number; y: number } {
-  if (zone === "corridor") {
-    return { ...CORRIDOR_ENTRANCE };
-  }
-  const z = ZONES[zone as keyof typeof ZONES];
-  switch (zone) {
-    case "desk":
-      return { x: z.x + z.width / 2, y: z.y + z.height + corridorW / 2 };
-    case "meeting":
-      return { x: z.x + z.width / 2, y: z.y + z.height + corridorW / 2 };
-    case "hotDesk":
-      return { x: z.x + z.width / 2, y: z.y - corridorW / 2 };
-    case "lounge":
-      return { x: z.x + z.width / 2, y: z.y - corridorW / 2 };
-    default:
-      return { ...CORRIDOR_ENTRANCE };
-  }
+  return DOOR_POINTS[zone];
 }
 
 function sameCorridorArm(a: AgentZone, b: AgentZone): boolean {
