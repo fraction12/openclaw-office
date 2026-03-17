@@ -1,8 +1,9 @@
 import { ChevronDown } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
+import { getAgentDisplayName, getAgentIdentity } from "@/lib/agent-identities";
 import { useChatDockStore } from "@/store/console-stores/chat-dock-store";
-import { useOfficeStore } from "@/store/office-store";
+import { useOfficeStore } from "@/store";
 
 export function AgentSelector() {
   const { t } = useTranslation("chat");
@@ -42,7 +43,7 @@ export function AgentSelector() {
           style={{ backgroundColor: getAgentColor(currentAgent?.id ?? "") }}
         />
         <span className="max-w-[100px] truncate">
-          {currentAgent?.name ?? t("agentSelector.defaultLabel")}
+          {currentAgent ? getAgentDisplayName(currentAgent.id, currentAgent.name) : t("agentSelector.defaultLabel")}
         </span>
         <ChevronDown className="h-3 w-3" />
       </button>
@@ -67,7 +68,7 @@ export function AgentSelector() {
                 className="inline-block h-2.5 w-2.5 rounded-full"
                 style={{ backgroundColor: getAgentColor(agent.id) }}
               />
-              <span className="truncate">{agent.name}</span>
+              <span className="truncate">{getAgentDisplayName(agent.id, agent.name)}</span>
             </button>
           ))}
         </div>
@@ -77,6 +78,11 @@ export function AgentSelector() {
 }
 
 function getAgentColor(id: string): string {
+  const identityColor = getAgentIdentity(id)?.color;
+  if (identityColor) {
+    return identityColor;
+  }
+
   const colors = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899"];
   let hash = 0;
   for (let i = 0; i < id.length; i++) {

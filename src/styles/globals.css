@@ -44,7 +44,7 @@
   }
 }
 
-/* Agent 状态动画 */
+/* Agent state animations */
 @keyframes agent-pulse {
   0%,
   100% {
@@ -148,4 +148,32 @@
 
 .animate-slide-down {
   animation: chat-slide-down 150ms ease-in forwards;
+}
+
+/* ——— Ambient feel ——— */
+:root {
+  --ambient-pulse-speed: 8s;
+  --ambient-opacity: 0.02;
+  --ambient-glow-size: 40px;
+}
+
+@keyframes ambient-pulse {
+  0%, 100% { opacity: var(--ambient-opacity); }
+  50% { opacity: calc(var(--ambient-opacity) * 2.5); }
+}
+
+/* Subtle activity glow on the office container */
+[data-activity-level="busy"] .office-container,
+[data-activity-level="intense"] .office-container {
+  box-shadow: inset 0 0 var(--ambient-glow-size) rgba(59, 130, 246, var(--ambient-opacity));
+}
+
+/* Pulse indicator for active office */
+[data-activity-level="intense"] .office-container::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(circle at center, rgba(59, 130, 246, 0.06) 0%, transparent 70%);
+  animation: ambient-pulse var(--ambient-pulse-speed) ease-in-out infinite;
 }

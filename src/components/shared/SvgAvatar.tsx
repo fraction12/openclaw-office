@@ -1,5 +1,6 @@
 import type { FaceShape, HairStyle, EyeStyle } from "@/lib/avatar-generator";
 import { generateSvgAvatar } from "@/lib/avatar-generator";
+import { getAgentDisplayName } from "@/lib/agent-identities";
 
 interface SvgAvatarProps {
   agentId: string;
@@ -95,6 +96,7 @@ function Eyes({ style }: { style: EyeStyle }) {
 
 export function SvgAvatar({ agentId, size = 40, className }: SvgAvatarProps) {
   const avatar = generateSvgAvatar(agentId);
+  const title = getAgentDisplayName(agentId, agentId);
 
   return (
     <svg
@@ -103,6 +105,7 @@ export function SvgAvatar({ agentId, size = 40, className }: SvgAvatarProps) {
       height={size}
       className={className}
       style={{ borderRadius: "50%", overflow: "hidden" }}
+      aria-label={title}
     >
       <rect width="48" height="48" fill={avatar.shirtColor} rx="24" />
       {/* Body/shirt */}

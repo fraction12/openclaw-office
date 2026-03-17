@@ -6,7 +6,7 @@ import * as THREE from "three";
 import { ZONES } from "@/lib/constants";
 import { position2dTo3d } from "@/lib/position-allocator";
 import { detectMeetingGroups } from "@/store/meeting-manager";
-import { useOfficeStore } from "@/store/office-store";
+import { useOfficeStore } from "@/store";
 import { AgentCharacter } from "./AgentCharacter";
 import { Environment3D } from "./Environment3D";
 import { OfficeLayout3D } from "./OfficeLayout3D";

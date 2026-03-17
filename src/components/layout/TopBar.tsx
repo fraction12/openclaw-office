@@ -5,7 +5,7 @@ import { useNavigate } from "react-router-dom";
 import { LanguageSwitcher } from "@/components/shared/LanguageSwitcher";
 import type { ConnectionStatus, ThemeMode, ViewMode, PageId } from "@/gateway/types";
 import { isWebGLAvailable } from "@/lib/webgl-detect";
-import { useOfficeStore } from "@/store/office-store";
+import { useOfficeStore } from "@/store";
 
 const APP_VERSION = typeof __APP_VERSION__ === "string" ? __APP_VERSION__ : "dev";
 

@@ -1,7 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import { generateAvatar3dColor } from "@/lib/avatar-generator";
-import { useOfficeStore } from "@/store/office-store";
+import { useOfficeStore } from "@/store";
 
 function formatTokens(n: number): string {
   if (n >= 1_000_000) {

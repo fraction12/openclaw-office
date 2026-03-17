@@ -51,6 +51,10 @@ export class GatewayWsClient {
   }
 
   connect(url: string, token: string): void {
+    if (this.ws) {
+      this.disconnect();
+    }
+
     this.url = url;
     this.token = token;
     this.shutdownReceived = false;
@@ -88,6 +92,10 @@ export class GatewayWsClient {
     this.responseHandlers.set(id, handler);
   }
 
+  removeResponseHandler(id: string): void {
+    this.responseHandlers.delete(id);
+  }
+
   send(data: unknown): void {
     if (this.ws?.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify(data));
@@ -95,6 +103,8 @@ export class GatewayWsClient {
   }
 
   private doConnect(): void {
+    this.snapshot = null;
+    this.serverInfo = null;
     this.setStatus(this.reconnectAttempt > 0 ? "reconnecting" : "connecting");
 
     try {
@@ -149,6 +159,11 @@ export class GatewayWsClient {
       this.shutdownReceived = true;
       this.clearReconnectTimer();
       this.setStatus("disconnected");
+      if (this.ws) {
+        this.ws.removeEventListener("close", this.handleClose);
+        this.ws.close();
+        this.ws = null;
+      }
     }
 
     const handlers = this.eventHandlers.get(frame.event);
@@ -174,7 +189,7 @@ export class GatewayWsClient {
       return;
     }
 
-    // connect 响应（可能没有 id 匹配）
+    // connect response (may not have a matching id)
     if (frame.ok && (frame.payload as HelloOk)?.type === "hello-ok") {
       this.handleConnectSuccess(frame.payload as HelloOk);
     } else if (!frame.ok) {

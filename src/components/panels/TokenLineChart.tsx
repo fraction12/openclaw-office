@@ -2,7 +2,7 @@ import { useTranslation } from "react-i18next";
 import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import type { TokenSnapshot } from "@/gateway/types";
 import { PALETTE } from "@/lib/avatar-generator";
-import { useOfficeStore } from "@/store/office-store";
+import { useOfficeStore } from "@/store";
 
 function formatTime(ts: number): string {
   const d = new Date(ts);

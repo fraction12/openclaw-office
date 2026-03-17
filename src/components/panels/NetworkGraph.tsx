@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { VisualAgent } from "@/gateway/types";
 import { STATUS_COLORS } from "@/lib/constants";
-import { useOfficeStore } from "@/store/office-store";
+import { useOfficeStore } from "@/store";
 
 const NODE_MIN_R = 8;
 const NODE_MAX_R = 24;

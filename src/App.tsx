@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState, useEffect } from "react";
+import { lazy, Suspense, useState, useEffect, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { AppShell } from "@/components/layout/AppShell";
@@ -11,6 +11,7 @@ import { DashboardPage } from "@/components/pages/DashboardPage";
 import { SettingsPage } from "@/components/pages/SettingsPage";
 import { SkillsPage } from "@/components/pages/SkillsPage";
 import { ConnectionSetupDialog } from "@/components/shared/ConnectionSetupDialog";
+import { ErrorBoundary } from "@/components/shared/ErrorBoundary";
 import type { PageId } from "@/gateway/types";
 import { useGatewayConnection } from "@/hooks/useGatewayConnection";
 import type { ConnectionPreference } from "@/lib/connection-preferences";
@@ -18,7 +19,8 @@ import { readConnectionPreference, writeConnectionPreference } from "@/lib/conne
 import { resolveGatewayConnectionConfig } from "@/lib/gateway-url";
 import { updateRuntimeConnectionTarget } from "@/lib/runtime-connection-api";
 import { useResponsive } from "@/hooks/useResponsive";
-import { useOfficeStore } from "@/store/office-store";
+import { useAmbient, restoreAmbientSound } from "@/hooks/useAmbient";
+import { useOfficeStore } from "@/store";
 
 const Scene3D = lazy(() => import("@/components/office-3d/Scene3D"));
 
@@ -35,6 +37,7 @@ function Scene3DFallback() {
 }
 
 function OfficeView() {
+  useAmbient();
   const viewMode = useOfficeStore((s) => s.viewMode);
   const [fading, setFading] = useState(false);
   const [displayMode, setDisplayMode] = useState(viewMode);
@@ -56,11 +59,15 @@ function OfficeView() {
       style={{ opacity: fading ? 0 : 1 }}
     >
       {displayMode === "2d" ? (
-        <FloorPlan />
+        <ErrorBoundary name="2D office view" resetKeys={[displayMode]}>
+          <FloorPlan />
+        </ErrorBoundary>
       ) : (
-        <Suspense fallback={<Scene3DFallback />}>
-          <Scene3D />
-        </Suspense>
+        <ErrorBoundary name="3D office view" resetKeys={[displayMode]}>
+          <Suspense fallback={<Scene3DFallback />}>
+            <Scene3D />
+          </Suspense>
+        </ErrorBoundary>
       )}
     </div>
   );
@@ -114,13 +121,24 @@ function PageTracker() {
   return null;
 }
 
+function ConsoleRouteBoundary({ name, children }: { name: string; children: ReactNode }) {
+  return (
+    <ErrorBoundary name={name} resetKeys={[name]}>
+      {children}
+    </ErrorBoundary>
+  );
+}
+
 export function App() {
+  useEffect(() => { restoreAmbientSound(); }, []);
   const { t } = useTranslation("common");
   const injected = (window as unknown as Record<string, unknown>).__OPENCLAW_CONFIG__ as
-    | { gatewayUrl?: string; gatewayToken?: string }
+    | { gatewayUrl?: string }
     | undefined;
   const proxyGatewayUrl = injected?.gatewayUrl || "/gateway-ws";
-  const managedGatewayToken = injected?.gatewayToken || import.meta.env.VITE_GATEWAY_TOKEN || "";
+  const envGatewayToken = import.meta.env.VITE_GATEWAY_TOKEN || "";
+  const [managedGatewayToken, setManagedGatewayToken] = useState(envGatewayToken);
+  const [tokenReady, setTokenReady] = useState(Boolean(envGatewayToken));
   const [connectionPreference, setConnectionPreference] = useState<ConnectionPreference | null>(
     () => readConnectionPreference(),
   );
@@ -131,7 +149,56 @@ export function App() {
   const setViewMode = useOfficeStore((s) => s.setViewMode);
 
   useEffect(() => {
+    if (envGatewayToken) {
+      setManagedGatewayToken(envGatewayToken);
+      setTokenReady(true);
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadManagedToken() {
+      setTokenReady(false);
+      try {
+        const response = await fetch("/__openclaw/token", {
+          credentials: "same-origin",
+          headers: { Accept: "application/json" },
+        });
+
+        if (!response.ok) {
+          throw new Error(`Failed to load Gateway token (${response.status})`);
+        }
+
+        const data = (await response.json()) as { token?: string };
+        if (!cancelled) {
+          setManagedGatewayToken(typeof data.token === "string" ? data.token : "");
+          setTokenReady(true);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setConnectionSetupError(
+            error instanceof Error ? error.message : t("errors.unknownError"),
+          );
+          setManagedGatewayToken("");
+          setTokenReady(true);
+        }
+      }
+    }
+
+    void loadManagedToken();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [envGatewayToken, t]);
+
+  useEffect(() => {
     if (!connectionPreference) {
+      setConnectionReady(false);
+      return;
+    }
+
+    if (connectionPreference.mode === "local" && !tokenReady) {
       setConnectionReady(false);
       return;
     }
@@ -172,7 +239,7 @@ export function App() {
     return () => {
       cancelled = true;
     };
-  }, [connectionPreference, proxyGatewayUrl, t]);
+  }, [connectionPreference, proxyGatewayUrl, t, tokenReady]);
 
   const browserGatewayToken =
     connectionPreference?.mode === "remote" ? connectionPreference.gatewayToken : managedGatewayToken;
@@ -219,6 +286,15 @@ export function App() {
     }
   };
 
+  if (connectionPreference?.mode === "local" && !tokenReady) {
+    return (
+      <>
+        <ThemeSync />
+        <ConnectionBootstrap message={t("connectionSetup.syncing")} />
+      </>
+    );
+  }
+
   if (!connectionPreference || connectionSetupError) {
     return (
       <>
@@ -251,12 +327,54 @@ export function App() {
           <Route path="/" element={<OfficeView />} />
         </Route>
         <Route element={<ConsoleLayout />}>
-          <Route path="/dashboard" element={<DashboardPage />} />
-          <Route path="/agents" element={<AgentsPage />} />
-          <Route path="/channels" element={<ChannelsPage />} />
-          <Route path="/skills" element={<SkillsPage />} />
-          <Route path="/cron" element={<CronPage />} />
-          <Route path="/settings" element={<SettingsPage />} />
+          <Route
+            path="/dashboard"
+            element={
+              <ConsoleRouteBoundary name="Console dashboard route">
+                <DashboardPage />
+              </ConsoleRouteBoundary>
+            }
+          />
+          <Route
+            path="/agents"
+            element={
+              <ConsoleRouteBoundary name="Console agents route">
+                <AgentsPage />
+              </ConsoleRouteBoundary>
+            }
+          />
+          <Route
+            path="/channels"
+            element={
+              <ConsoleRouteBoundary name="Console channels route">
+                <ChannelsPage />
+              </ConsoleRouteBoundary>
+            }
+          />
+          <Route
+            path="/skills"
+            element={
+              <ConsoleRouteBoundary name="Console skills route">
+                <SkillsPage />
+              </ConsoleRouteBoundary>
+            }
+          />
+          <Route
+            path="/cron"
+            element={
+              <ConsoleRouteBoundary name="Console cron route">
+                <CronPage />
+              </ConsoleRouteBoundary>
+            }
+          />
+          <Route
+            path="/settings"
+            element={
+              <ConsoleRouteBoundary name="Console settings route">
+                <SettingsPage />
+              </ConsoleRouteBoundary>
+            }
+          />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

@@ -14,6 +14,7 @@ const DEFAULT_STATE: SidebarLayoutState = {
   metrics: { collapsed: true, height: null },
   agents: { collapsed: false, height: null },
   subAgents: { collapsed: false, height: null },
+  crons: { collapsed: true, height: null },
   detail: { collapsed: false, height: null },
   timeline: { collapsed: false, height: null },
 };

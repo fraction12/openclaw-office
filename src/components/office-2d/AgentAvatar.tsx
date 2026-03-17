@@ -1,9 +1,19 @@
 import { useState, memo, useRef, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import type { VisualAgent, AgentVisualStatus } from "@/gateway/types";
-import { generateSvgAvatar, type SvgAvatarData } from "@/lib/avatar-generator";
+import type { VisualAgent } from "@/gateway/types";
+import { generateAvatarAccentColor, generateSvgAvatar, type SvgAvatarData } from "@/lib/avatar-generator";
+import { getAgentDisplayName, getAgentIdentity } from "@/lib/agent-identities";
 import { STATUS_COLORS, AVATAR } from "@/lib/constants";
-import { useOfficeStore } from "@/store/office-store";
+import {
+  formatLastActive,
+  getAgentConfidence,
+  getConfidenceVisualStyle,
+  getStatusAnimation,
+  getStatusIndicator,
+  getStatusRingDasharray,
+} from "@/lib/agent-visuals";
+import { getToolIcon, getToolPillLabel } from "@/lib/tool-display";
+import { useOfficeStore } from "@/store";
 
 const WALK_BOB_AMPLITUDE = 2;
 const WALK_BOB_FREQ = 8;
@@ -28,18 +38,31 @@ export const AgentAvatar = memo(function AgentAvatar({ agent }: AgentAvatarProps
   const isPlaceholder = agent.isPlaceholder;
   const isUnconfirmed = !agent.confirmed;
   const isWalking = agent.movement !== null;
-  const color = isPlaceholder || isUnconfirmed ? "#6b7280" : STATUS_COLORS[agent.status];
+  const statusColor = STATUS_COLORS[agent.status] ?? "#6b7280";
+  const color = isPlaceholder || isUnconfirmed ? "#6b7280" : generateAvatarAccentColor(agent.id);
   const isDark = theme === "dark";
+  const identity = getAgentIdentity(agent.id);
   const avatarData = generateSvgAvatar(agent.id);
   const clipId = `avatar-clip-${agent.id}`;
-  const groupOpacity = isPlaceholder ? 0.3 : isUnconfirmed ? 0.5 : 1;
-
+  const confidence = getAgentConfidence(agent);
+  const confidenceStyle = getConfidenceVisualStyle(confidence);
+  const stateOpacity = isPlaceholder ? 0.3 : isUnconfirmed ? 0.5 : confidenceStyle.opacity;
+  const badgeText = getStatusIndicator(agent.status);
+  const bodyDesaturated = agent.status === "stale" || agent.status === "unknown" || agent.status === "disconnected";
+  const fullDisplayName = getAgentDisplayName(agent.id, agent.name);
   const displayName =
-    agent.name.length > AVATAR.nameLabelMaxChars
-      ? `${agent.name.slice(0, AVATAR.nameLabelMaxChars)}…`
-      : agent.name;
+    fullDisplayName.length > AVATAR.nameLabelMaxChars
+      ? `${fullDisplayName.slice(0, AVATAR.nameLabelMaxChars)}…`
+      : fullDisplayName;
 
-  // Walk animation loop via requestAnimationFrame
+  const tooltipLines = [
+    fullDisplayName,
+    `${t(`agent.statusLabels.${agent.status}`)} · ${Math.round(confidence * 100)}%`,
+    (agent.statusReason ?? agent.derivationReason) ? `Reason: ${agent.statusReason ?? agent.derivationReason}` : null,
+    agent.status === "tool_calling" && agent.currentTool ? `${getToolIcon(agent.currentTool.name)} ${getToolPillLabel(agent.currentTool)}` : null,
+    `Last active: ${formatLastActive(agent.lastActiveAt)}`,
+  ].filter(Boolean) as string[];
+
   const agentIdRef = useRef(agent.id);
   agentIdRef.current = agent.id;
 
@@ -55,17 +78,13 @@ export const AgentAvatar = memo(function AgentAvatar({ agent }: AgentAvatarProps
       const a = state.agents.get(agentIdRef.current);
       if (!a) return;
 
-      // Walk bob effect
       let bobY = 0;
       let walkScale = 1;
       if (a.movement) {
         const p = a.movement.progress;
         const elapsed = (Date.now() - a.movement.startTime) / 1000;
         bobY = Math.sin(elapsed * WALK_BOB_FREQ * Math.PI * 2) * WALK_BOB_AMPLITUDE;
-
-        // Stand-up effect at start
         if (p < 0.1) walkScale = 0.9 + p;
-        // Sit-down effect at end
         else if (p > 0.9) {
           const t = (p - 0.9) / 0.1;
           walkScale = 1 - 0.05 * Math.sin(t * Math.PI);
@@ -77,9 +96,7 @@ export const AgentAvatar = memo(function AgentAvatar({ agent }: AgentAvatarProps
         `translate(${a.position.x}, ${a.position.y + bobY}) scale(${walkScale})`,
       );
 
-      if (a.movement) {
-        rafRef.current = requestAnimationFrame(animate);
-      }
+      if (a.movement) rafRef.current = requestAnimationFrame(animate);
     },
     [tickMovement],
   );
@@ -99,12 +116,11 @@ export const AgentAvatar = memo(function AgentAvatar({ agent }: AgentAvatarProps
       ref={gRef}
       transform={`translate(${agent.position.x}, ${agent.position.y})`}
       style={{ cursor: isPlaceholder ? "default" : "pointer" }}
-      opacity={groupOpacity}
+      opacity={stateOpacity}
       onClick={() => !isPlaceholder && selectAgent(agent.id)}
       onMouseEnter={() => !isPlaceholder && setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
-      {/* Selected glow */}
       {isSelected && (
         <circle
           r={r + 8}
@@ -114,21 +130,31 @@ export const AgentAvatar = memo(function AgentAvatar({ agent }: AgentAvatarProps
         />
       )}
 
-      {/* Status ring with animation */}
-      <StatusRing status={agent.status} r={r} color={color} isWalking={isWalking} isPlaceholder={isPlaceholder} />
+      <StatusRing agent={agent} r={r} color={color} isWalking={isWalking} isPlaceholder={isPlaceholder} />
 
-      {/* Avatar face */}
       <defs>
         <clipPath id={clipId}>
           <circle r={r - 2} />
         </clipPath>
       </defs>
       <circle r={r - 2} fill={isDark ? "#1e293b" : "#f8fafc"} />
-      <g clipPath={`url(#${clipId})`}>
-        <AvatarFace data={avatarData} size={r * 2 - 4} />
+      <g clipPath={`url(#${clipId})`} style={bodyDesaturated ? { filter: "grayscale(1) saturate(0.25)" } : undefined}>
+        <AvatarFace agentId={agent.id} data={avatarData} size={r * 2 - 4} />
       </g>
+      {identity && (
+        <g transform={`translate(0, ${r * 0.55})`}>
+          <circle
+            r={r * 0.32}
+            fill={isDark ? "rgba(15,23,42,0.92)" : "rgba(255,255,255,0.92)"}
+            stroke={color}
+            strokeWidth={1.4}
+          />
+          <text textAnchor="middle" dy="3.4" fontSize="10" fill={color} fontWeight="bold">
+            {identity.displayName.charAt(0)}
+          </text>
+        </g>
+      )}
 
-      {/* Sub-agent badge */}
       {agent.isSubAgent && (
         <g transform={`translate(${r * 0.6}, ${r * 0.5})`}>
           <circle r={7} fill={isDark ? "#1e293b" : "#fff"} stroke={color} strokeWidth={1.2} />
@@ -138,52 +164,37 @@ export const AgentAvatar = memo(function AgentAvatar({ agent }: AgentAvatarProps
         </g>
       )}
 
-      {/* Thinking indicator (three dots) */}
       {agent.status === "thinking" && <ThinkingDots r={r} />}
-
-      {/* Error badge */}
-      {agent.status === "error" && (
-        <g transform={`translate(${r * 0.65}, ${-r * 0.65})`}>
-          <circle r={7} fill="#ef4444" />
-          <text textAnchor="middle" dy="4" fontSize="10" fill="#fff" fontWeight="bold">
-            !
-          </text>
-        </g>
-      )}
-
-      {/* Speaking indicator — chat bubble icon with pulse (mirrors ThinkingDots placement) */}
       {agent.status === "speaking" && <SpeakingIndicator r={r} />}
 
-      {/* Tool name label */}
+      {badgeText && (
+        <StatusBadge r={r} color={statusColor} text={badgeText} isDark={isDark} />
+      )}
+
       {agent.status === "tool_calling" && agent.currentTool && (
-        <foreignObject x={-50} y={r + 2} width={100} height={20} style={{ pointerEvents: "none" }}>
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "center",
-            }}
-          >
+        <foreignObject x={-75} y={r + 2} width={150} height={22} style={{ pointerEvents: "none" }}>
+          <div style={{ display: "flex", justifyContent: "center" }}>
             <span
               style={{
                 fontSize: "9px",
                 fontWeight: 600,
                 color: "#fff",
                 backgroundColor: "#f97316",
-                borderRadius: "4px",
-                padding: "1px 6px",
+                borderRadius: "5px",
+                padding: "2px 7px",
                 whiteSpace: "nowrap",
-                maxWidth: "90px",
+                maxWidth: "140px",
                 overflow: "hidden",
                 textOverflow: "ellipsis",
+                lineHeight: "1.3",
               }}
             >
-              {agent.currentTool.name}
+              {getToolIcon(agent.currentTool.name)} {getToolPillLabel(agent.currentTool)}
             </span>
           </div>
         </foreignObject>
       )}
 
-      {/* Name label */}
       <foreignObject
         x={-60}
         y={r + (agent.status === "tool_calling" && agent.currentTool ? 18 : 4)}
@@ -191,14 +202,9 @@ export const AgentAvatar = memo(function AgentAvatar({ agent }: AgentAvatarProps
         height={22}
         style={{ pointerEvents: "none" }}
       >
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "center",
-          }}
-        >
+        <div style={{ display: "flex", justifyContent: "center" }}>
           <span
-            title={agent.name}
+            title={fullDisplayName}
             style={{
               fontSize: "11px",
               fontWeight: 500,
@@ -216,37 +222,52 @@ export const AgentAvatar = memo(function AgentAvatar({ agent }: AgentAvatarProps
         </div>
       </foreignObject>
 
-      {/* Hover tooltip */}
-      {hovered && (
-        <foreignObject
-          x={-80}
-          y={-r - 38}
-          width={160}
-          height={32}
-          style={{ pointerEvents: "none" }}
-        >
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "center",
-            }}
-          >
+      {agent.cronLabel && (agent.status === "thinking" || agent.status === "tool_calling" || agent.status === "speaking") && (
+        <foreignObject x={-60} y={r + (agent.status === "tool_calling" && agent.currentTool ? 36 : 22)} width={120} height={18} style={{ pointerEvents: "none" }}>
+          <div style={{ display: "flex", justifyContent: "center" }}>
             <span
+              style={{
+                fontSize: "8px",
+                fontWeight: 600,
+                color: isDark ? "#a5b4fc" : "#6366f1",
+                backgroundColor: isDark ? "rgba(99,102,241,0.15)" : "rgba(99,102,241,0.1)",
+                borderRadius: "3px",
+                padding: "1px 5px",
+                whiteSpace: "nowrap",
+                maxWidth: "100px",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+              }}
+            >
+              ⏱ {agent.cronLabel}
+            </span>
+          </div>
+        </foreignObject>
+      )}
+
+      {hovered && (
+        <foreignObject x={-110} y={-r - 72} width={220} height={78} style={{ pointerEvents: "none" }}>
+          <div style={{ display: "flex", justifyContent: "center" }}>
+            <div
               style={{
                 fontSize: "11px",
                 fontWeight: 500,
                 color: isDark ? "#e2e8f0" : "#374151",
-                backgroundColor: isDark ? "rgba(30,41,59,0.85)" : "rgba(255,255,255,0.9)",
+                backgroundColor: isDark ? "rgba(30,41,59,0.9)" : "rgba(255,255,255,0.94)",
                 backdropFilter: "blur(8px)",
-                borderRadius: "8px",
-                padding: "4px 10px",
-                whiteSpace: "nowrap",
+                borderRadius: "10px",
+                padding: "6px 10px",
                 boxShadow: isDark ? "0 4px 8px rgba(0,0,0,0.3)" : "0 4px 8px rgba(0,0,0,0.1)",
                 border: `1px solid ${isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)"}`,
+                minWidth: "180px",
               }}
             >
-              {agent.name} · {t(`agent.statusLabels.${agent.status}`)}
-            </span>
+              {tooltipLines.map((line, index) => (
+                <div key={`${agent.id}-${index}`} style={{ whiteSpace: "normal", lineHeight: 1.35 }}>
+                  {line}
+                </div>
+              ))}
+            </div>
           </div>
         </foreignObject>
       )}
@@ -254,57 +275,41 @@ export const AgentAvatar = memo(function AgentAvatar({ agent }: AgentAvatarProps
   );
 });
 
-/* --- Status ring with per-state animation --- */
-
 function StatusRing({
-  status,
+  agent,
   r,
   color,
   isWalking,
   isPlaceholder,
 }: {
-  status: AgentVisualStatus;
+  agent: VisualAgent;
   r: number;
   color: string;
   isWalking: boolean;
   isPlaceholder: boolean;
 }) {
-  const animStyle = isWalking || isPlaceholder ? {} : getStatusRingAnimation(status);
-  const dashArray = isWalking ? "4 3" : isPlaceholder ? "6 3" : undefined;
+  const confidence = getAgentConfidence(agent);
+  const confidenceStyle = getConfidenceVisualStyle(confidence);
+  const animation = getStatusAnimation(agent.status);
+  const statusDash = getStatusRingDasharray(agent.status);
+  const dashArray = isWalking ? "4 3" : statusDash ?? confidenceStyle.ringDasharray;
   const strokeColor = isWalking ? "#3b82f6" : color;
+
   return (
     <circle
       r={r}
       fill="none"
       stroke={strokeColor}
-      strokeWidth={AVATAR.strokeWidth}
-      strokeDasharray={dashArray}
+      strokeWidth={isPlaceholder ? 2 : confidenceStyle.ringWidth}
+      strokeDasharray={isPlaceholder ? "6 3" : dashArray}
+      opacity={isPlaceholder ? 0.5 : confidenceStyle.ringOpacity}
       style={{
-        transition: "stroke 300ms ease",
-        ...animStyle,
+        transition: "stroke 300ms ease, opacity 300ms ease, stroke-width 300ms ease",
+        animation: !isWalking && !isPlaceholder ? animation : undefined,
       }}
     />
   );
 }
-
-function getStatusRingAnimation(status: AgentVisualStatus): React.CSSProperties {
-  switch (status) {
-    case "thinking":
-      return { animation: "agent-pulse 1.5s ease-in-out infinite" };
-    case "tool_calling":
-      return { animation: "agent-pulse 2s ease-in-out infinite", strokeDasharray: "6 3" };
-    case "speaking":
-      return { animation: "agent-pulse 1s ease-in-out infinite" };
-    case "error":
-      return { animation: "agent-blink 0.8s ease-in-out infinite" };
-    case "spawning":
-      return { animation: "agent-spawn 0.5s ease-out forwards" };
-    default:
-      return {};
-  }
-}
-
-/* --- Thinking dots indicator --- */
 
 function ThinkingDots({ r }: { r: number }) {
   return (
@@ -316,25 +321,20 @@ function ThinkingDots({ r }: { r: number }) {
           cy={0}
           r={2}
           fill="#3b82f6"
-          style={{
-            animation: `thinking-dots 1.2s ease-in-out ${i * 0.15}s infinite`,
-          }}
+          style={{ animation: `thinking-dots 1.2s ease-in-out ${i * 0.15}s infinite` }}
         />
       ))}
     </g>
   );
 }
 
-/* --- Speaking indicator (chat bubble icon at avatar top, same position as ThinkingDots) --- */
-
 function SpeakingIndicator({ r }: { r: number }) {
   return (
     <g transform={`translate(${r * 0.55}, ${-r * 0.75})`}>
-      <circle r={7} fill="#a855f7" opacity={0.9}>
+      <circle r={7} fill="#10B981" opacity={0.9}>
         <animate attributeName="r" values="6;8;6" dur="1.5s" repeatCount="indefinite" />
         <animate attributeName="opacity" values="0.9;0.5;0.9" dur="1.5s" repeatCount="indefinite" />
       </circle>
-      {/* Tiny chat-bubble path scaled to fit */}
       <g transform="translate(-4.5,-4.5) scale(0.45)">
         <path
           fill="#fff"
@@ -347,42 +347,57 @@ function SpeakingIndicator({ r }: { r: number }) {
   );
 }
 
-/* --- Avatar face SVG based on SvgAvatarData --- */
-
-function AvatarFace({ data, size }: { data: SvgAvatarData; size: number }) {
-  const s = size / 2;
-  const faceRx =
-    data.faceShape === "round" ? s * 0.8 : data.faceShape === "oval" ? s * 0.7 : s * 0.75;
-  const faceRy = data.faceShape === "oval" ? s * 0.9 : faceRx;
-
+function StatusBadge({ r, color, text, isDark }: { r: number; color: string; text: string; isDark: boolean }) {
   return (
-    <g>
-      {/* Shirt/body (lower half) */}
-      <rect x={-s} y={s * 0.4} width={size} height={s * 1.2} fill={data.shirtColor} />
-
-      {/* Face */}
-      <ellipse cx={0} cy={-s * 0.05} rx={faceRx} ry={faceRy} fill={data.skinColor} />
-
-      {/* Hair */}
-      <HairSvg style={data.hairStyle} color={data.hairColor} s={s} faceRx={faceRx} />
-
-      {/* Eyes */}
-      <EyesSvg style={data.eyeStyle} s={s} />
+    <g transform={`translate(${r * 0.65}, ${-r * 0.65})`}>
+      <circle r={8} fill={isDark ? "#0f172a" : "#fff"} stroke={color} strokeWidth={1.5} opacity={0.96} />
+      <text textAnchor="middle" dy="3.5" fontSize={text.length > 1 ? "7" : "10"} fill={color} fontWeight="bold">
+        {text}
+      </text>
     </g>
   );
 }
 
-function HairSvg({
-  style,
-  color,
-  s,
-  faceRx,
-}: {
-  style: SvgAvatarData["hairStyle"];
-  color: string;
-  s: number;
-  faceRx: number;
-}) {
+function AvatarFace({ agentId, data, size }: { agentId: string; data: SvgAvatarData; size: number }) {
+  const s = size / 2;
+  const faceRx = data.faceShape === "round" ? s * 0.8 : data.faceShape === "oval" ? s * 0.7 : s * 0.75;
+  const faceRy = data.faceShape === "oval" ? s * 0.9 : faceRx;
+  const identity = getAgentIdentity(agentId);
+  const accentColor = generateAvatarAccentColor(agentId);
+  const bodyVariant = identity?.avatarStyle ?? "generic";
+
+  return (
+    <g>
+      {bodyVariant === "professional" ? (
+        <g>
+          <rect x={-s} y={s * 0.38} width={size} height={s * 1.22} fill="#172554" />
+          <path d={`M ${-s * 0.78} ${s * 0.4} L ${-s * 0.15} ${s * 0.4} L ${-s * 0.36} ${s * 0.95} L ${-s} ${s * 1.35} Z`} fill="#0f172a" />
+          <path d={`M ${s * 0.78} ${s * 0.4} L ${s * 0.15} ${s * 0.4} L ${s * 0.36} ${s * 0.95} L ${s} ${s * 1.35} Z`} fill="#0f172a" />
+          <rect x={-s * 0.14} y={s * 0.42} width={s * 0.28} height={s * 0.76} rx={3} fill="#dbeafe" />
+          <path d={`M 0 ${s * 0.5} L ${s * 0.16} ${s * 0.88} L 0 ${s * 1.18} L ${-s * 0.16} ${s * 0.88} Z`} fill={accentColor} />
+        </g>
+      ) : bodyVariant === "technical" ? (
+        <g>
+          <path d={`M ${-s} ${s * 1.4} L ${-s * 0.82} ${s * 0.52} Q 0 ${s * 0.2} ${s * 0.82} ${s * 0.52} L ${s} ${s * 1.4} Z`} fill={data.shirtColor} />
+          <path d={`M ${-s * 0.7} ${s * 0.54} Q 0 ${s * 0.15} ${s * 0.7} ${s * 0.54} L ${s * 0.42} ${s * 0.8} Q 0 ${s * 0.46} ${-s * 0.42} ${s * 0.8} Z`} fill="#1f2937" opacity={0.9} />
+          <rect x={-s * 0.36} y={s * 0.78} width={s * 0.72} height={s * 0.2} rx={3} fill={accentColor} opacity={0.9} />
+          <circle cx={s * 0.42} cy={s * 0.96} r={s * 0.08} fill="#e5e7eb" opacity={0.9} />
+          <circle cx={s * 0.6} cy={s * 0.96} r={s * 0.08} fill="#e5e7eb" opacity={0.7} />
+        </g>
+      ) : (
+        <rect x={-s} y={s * 0.4} width={size} height={s * 1.2} fill={data.shirtColor} />
+      )}
+      <ellipse cx={0} cy={-s * 0.05} rx={faceRx} ry={faceRy} fill={data.skinColor} />
+      <HairSvg style={data.hairStyle} color={data.hairColor} s={s} faceRx={faceRx} />
+      <EyesSvg style={data.eyeStyle} s={s} />
+      {bodyVariant === "technical" && (
+        <path d={`M ${-s * 0.28} ${s * 0.06} Q 0 ${s * 0.22} ${s * 0.28} ${s * 0.06}`} fill="none" stroke="#475569" strokeWidth={1.3} strokeLinecap="round" />
+      )}
+    </g>
+  );
+}
+
+function HairSvg({ style, color, s, faceRx }: { style: SvgAvatarData["hairStyle"]; color: string; s: number; faceRx: number }) {
   switch (style) {
     case "short":
       return <ellipse cx={0} cy={-s * 0.55} rx={faceRx * 0.95} ry={s * 0.45} fill={color} />;
@@ -391,11 +406,7 @@ function HairSvg({
         <g>
           <ellipse cx={0} cy={-s * 0.55} rx={faceRx * 0.9} ry={s * 0.4} fill={color} />
           {[-0.4, -0.15, 0.1, 0.35].map((off) => (
-            <polygon
-              key={off}
-              points={`${off * s * 2},-${s * 0.85} ${off * s * 2 - 3},-${s * 0.5} ${off * s * 2 + 3},-${s * 0.5}`}
-              fill={color}
-            />
+            <polygon key={off} points={`${off * s * 2},-${s * 0.85} ${off * s * 2 - 3},-${s * 0.5} ${off * s * 2 + 3},-${s * 0.5}`} fill={color} />
           ))}
         </g>
       );
@@ -403,14 +414,7 @@ function HairSvg({
       return (
         <g>
           <ellipse cx={-s * 0.1} cy={-s * 0.55} rx={faceRx} ry={s * 0.45} fill={color} />
-          <rect
-            x={faceRx * 0.3}
-            y={-s * 0.9}
-            width={faceRx * 0.5}
-            height={s * 0.3}
-            rx={3}
-            fill={color}
-          />
+          <rect x={faceRx * 0.3} y={-s * 0.9} width={faceRx * 0.5} height={s * 0.3} rx={3} fill={color} />
         </g>
       );
     case "curly":
@@ -428,16 +432,7 @@ function HairSvg({
         </g>
       );
     case "buzz":
-      return (
-        <ellipse
-          cx={0}
-          cy={-s * 0.45}
-          rx={faceRx * 0.85}
-          ry={s * 0.35}
-          fill={color}
-          opacity={0.7}
-        />
-      );
+      return <ellipse cx={0} cy={-s * 0.45} rx={faceRx * 0.85} ry={s * 0.35} fill={color} opacity={0.7} />;
     default:
       return null;
   }
@@ -457,24 +452,8 @@ function EyesSvg({ style, s }: { style: SvgAvatarData["eyeStyle"]; s: number }) 
     case "line":
       return (
         <g>
-          <line
-            x1={-gap - 3}
-            y1={ey}
-            x2={-gap + 3}
-            y2={ey}
-            stroke="#333"
-            strokeWidth={1.5}
-            strokeLinecap="round"
-          />
-          <line
-            x1={gap - 3}
-            y1={ey}
-            x2={gap + 3}
-            y2={ey}
-            stroke="#333"
-            strokeWidth={1.5}
-            strokeLinecap="round"
-          />
+          <line x1={-gap - 3} y1={ey} x2={-gap + 3} y2={ey} stroke="#333" strokeWidth={1.5} strokeLinecap="round" />
+          <line x1={gap - 3} y1={ey} x2={gap + 3} y2={ey} stroke="#333" strokeWidth={1.5} strokeLinecap="round" />
         </g>
       );
     case "wide":

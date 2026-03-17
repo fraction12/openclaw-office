@@ -1,12 +1,12 @@
 import { create } from "zustand";
 import type { GatewayAdapter } from "@/gateway/adapter";
-import { getAdapter } from "@/gateway/adapter-provider";
+import { getAdapterOrThrow } from "@/gateway/adapter-provider";
 import type { SessionInfo } from "@/gateway/adapter-types";
 import type { GatewayEventFrame } from "@/gateway/types";
 import i18n from "@/i18n";
 import { localPersistence } from "@/lib/local-persistence";
 import { generateMessageId } from "@/lib/message-utils";
-import { useOfficeStore } from "@/store/office-store";
+import { useOfficeStore } from "@/store";
 
 export type MessageRole = "user" | "assistant";
 
@@ -139,7 +139,7 @@ export const useChatDockStore = create<ChatDockState>((set, get) => ({
     try {
       let adapter: GatewayAdapter;
       try {
-        adapter = getAdapter();
+        adapter = getAdapterOrThrow();
       } catch (initErr) {
         console.error("[ChatDock] Adapter not initialized:", initErr);
         set({ error: i18n.t("common:errors.adapterNotInitialized"), isStreaming: false });
@@ -168,7 +168,7 @@ export const useChatDockStore = create<ChatDockState>((set, get) => ({
     });
 
     try {
-      const adapter = getAdapter();
+      const adapter = getAdapterOrThrow();
       await adapter.chatAbort(currentSessionKey);
     } catch (err) {
       set({ error: String(err) });
@@ -212,7 +212,7 @@ export const useChatDockStore = create<ChatDockState>((set, get) => ({
 
   loadSessions: async () => {
     try {
-      const adapter = getAdapter();
+      const adapter = getAdapterOrThrow();
       const result = await adapter.sessionsList();
       const sessions = Array.isArray(result) ? result : [];
       set({ sessions });
@@ -241,7 +241,7 @@ export const useChatDockStore = create<ChatDockState>((set, get) => ({
   loadHistory: async () => {
     const { currentSessionKey } = get();
     try {
-      const adapter = getAdapter();
+      const adapter = getAdapterOrThrow();
       const rawMessages = await adapter.chatHistory(currentSessionKey);
       const messages: ChatDockMessage[] = rawMessages.map((m) => ({
         id: m.id,
@@ -260,7 +260,7 @@ export const useChatDockStore = create<ChatDockState>((set, get) => ({
     const { currentSessionKey } = get();
     set({ isHistoryLoading: true });
     try {
-      const adapter = getAdapter();
+      const adapter = getAdapterOrThrow();
       const rawMessages = await adapter.chatHistory(currentSessionKey);
       const messages: ChatDockMessage[] = rawMessages.map((m) => ({
         id: m.id,

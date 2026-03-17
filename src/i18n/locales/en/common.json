@@ -52,13 +52,17 @@
       "speaking": "Speaking",
       "spawning": "Spawning",
       "error": "Error",
-      "offline": "Offline"
+      "offline": "Offline",
+      "sleeping": "Sleeping",
+      "stale": "Stale",
+      "unknown": "Unknown",
+      "disconnected": "Disconnected"
     }
   },
   "zones": {
-    "desk": "Desk Zone",
+    "desk": "Offices",
     "meeting": "Meeting Zone",
-    "hotDesk": "Hot Desk Zone",
+    "hotDesk": "Sub-agents",
     "lounge": "Lounge Zone"
   },
   "errors": {

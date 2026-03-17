@@ -1,5 +1,5 @@
-// Gateway Adapter 统一接口
-// 提供 mock 与 gateway（WebSocket）两种实现
+// Unified Gateway Adapter interface
+// Provides both mock and gateway (WebSocket) implementations
 
 import type {
   AgentCreateParams,

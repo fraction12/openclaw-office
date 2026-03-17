@@ -1,6 +1,6 @@
 import { memo } from "react";
 import type { VisualAgent } from "@/gateway/types";
-import { useOfficeStore } from "@/store/office-store";
+import { useOfficeStore } from "@/store";
 import { AgentAvatar } from "./AgentAvatar";
 import { Desk, Chair } from "./furniture";
 

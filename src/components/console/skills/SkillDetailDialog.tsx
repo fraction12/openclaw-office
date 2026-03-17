@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import { getAdapter } from "@/gateway/adapter-provider";
+import { getAdapterOrThrow } from "@/gateway/adapter-provider";
 import type { SkillInfo } from "@/gateway/adapter-types";
 import { useConfigStore } from "@/store/console-stores/config-store";
 
@@ -76,7 +76,7 @@ export function SkillDetailDialog({ open, skill, onClose, onSaved }: SkillDetail
         acc[key] = item.value.trim();
         return acc;
       }, {});
-      await getAdapter().skillsUpdate(skill.id, {
+      await getAdapterOrThrow().skillsUpdate(skill.id, {
         apiKey: apiKey || undefined,
         env: Object.keys(env).length > 0 ? env : undefined,
       });
@@ -357,7 +357,7 @@ export function SkillDetailDialog({ open, skill, onClose, onSaved }: SkillDetail
                 type="checkbox"
                 checked={skill.enabled}
                 onChange={() => {
-                  void getAdapter()
+                  void getAdapterOrThrow()
                     .skillsUpdate(skill.id, { enabled: !skill.enabled })
                     .then(() => {
                       useConfigStore.getState().setRuntimeApplied("configLifecycle.runtimeSkill");

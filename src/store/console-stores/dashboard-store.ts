@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { waitForAdapter } from "@/gateway/adapter-provider";
+import { getAdapterOrThrow } from "@/gateway/adapter-provider";
 import type { ChannelInfo, SkillInfo, UsageInfo } from "@/gateway/adapter-types";
 
 interface DashboardState {
@@ -24,7 +24,7 @@ export const useDashboardStore = create<DashboardState>((set) => ({
   refresh: async () => {
     set({ isLoading: true, error: null });
     try {
-      const adapter = await waitForAdapter();
+      const adapter = getAdapterOrThrow();
       const results = await Promise.allSettled([
         adapter.channelsStatus(),
         adapter.skillsStatus(),

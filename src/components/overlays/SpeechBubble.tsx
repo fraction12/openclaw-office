@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Markdown from "react-markdown";
 import { useTranslation } from "react-i18next";
 import type { VisualAgent } from "@/gateway/types";
@@ -8,35 +8,56 @@ interface SpeechBubbleOverlayProps {
   agent: VisualAgent;
 }
 
+const FULLY_VISIBLE_MS = 5_000;
+const FADE_DURATION_MS = 2_000;
+
 export function SpeechBubbleOverlay({ agent }: SpeechBubbleOverlayProps) {
   const { t } = useTranslation("common");
-  const [visible, setVisible] = useState(true);
   const [dismissed, setDismissed] = useState(false);
+  const [fadeStartAt, setFadeStartAt] = useState<number | null>(null);
+  const [now, setNow] = useState(() => Date.now());
   const speechText = agent.speechBubble?.text ?? "";
+  const speechTimestamp = agent.speechBubble?.timestamp ?? 0;
 
   useEffect(() => {
     setDismissed(false);
-    setVisible(true);
-  }, [speechText]);
+    setFadeStartAt(null);
+    setNow(Date.now());
+  }, [speechText, speechTimestamp]);
 
   useEffect(() => {
-    if (dismissed) {
-      setVisible(false);
+    if (!agent.speechBubble || dismissed) return;
+    if (agent.status === "speaking") {
+      setFadeStartAt(null);
       return;
     }
 
-    if (agent.status !== "speaking") {
-      const readDelayMs = Math.min(30_000, Math.max(12_000, 9_000 + speechText.length * 30));
-      const timer = setTimeout(() => setVisible(false), readDelayMs);
-      return () => clearTimeout(timer);
-    }
+    if (fadeStartAt !== null) return;
+    const timer = window.setTimeout(() => {
+      setFadeStartAt(Date.now());
+    }, FULLY_VISIBLE_MS);
+    return () => window.clearTimeout(timer);
+  }, [agent.status, agent.speechBubble, dismissed, fadeStartAt]);
 
-    setVisible(true);
-  }, [agent.status, dismissed, speechText]);
+  useEffect(() => {
+    if (fadeStartAt === null || dismissed) return;
+    const interval = window.setInterval(() => setNow(Date.now()), 50);
+    const timeout = window.setTimeout(() => setDismissed(true), FADE_DURATION_MS);
+    return () => {
+      window.clearInterval(interval);
+      window.clearTimeout(timeout);
+    };
+  }, [fadeStartAt, dismissed]);
 
-  if (!agent.speechBubble || !visible || dismissed) {
-    return null;
-  }
+  const opacity = useMemo(() => {
+    if (dismissed) return 0;
+    if (!agent.speechBubble) return 0;
+    if (agent.status === "speaking" || fadeStartAt === null) return 1;
+    const elapsed = now - fadeStartAt;
+    return Math.max(0, 1 - elapsed / FADE_DURATION_MS);
+  }, [agent.speechBubble, agent.status, dismissed, fadeStartAt, now]);
+
+  if (!agent.speechBubble || dismissed || opacity <= 0) return null;
 
   const leftPct = (agent.position.x / SVG_WIDTH) * 100;
   const topPct = (agent.position.y / SVG_HEIGHT) * 100;
@@ -61,8 +82,8 @@ export function SpeechBubbleOverlay({ agent }: SpeechBubbleOverlayProps) {
         left: `${leftPct}%`,
         top: `${topPct}%`,
         transform: `translate(${translateX}, -100%) translateY(-52px)`,
-        opacity: agent.status === "speaking" ? 1 : 0,
-        transition: "opacity 500ms ease",
+        opacity,
+        transition: fadeStartAt === null ? "opacity 150ms ease" : "none",
         zIndex: 21,
       }}
     >
@@ -75,7 +96,6 @@ export function SpeechBubbleOverlay({ agent }: SpeechBubbleOverlayProps) {
             type="button"
             onClick={() => {
               setDismissed(true);
-              setVisible(false);
             }}
             aria-label={t("actions.close")}
             className="rounded-md px-1.5 py-0.5 text-sm leading-none text-slate-500 transition-colors hover:bg-slate-200 hover:text-slate-800 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-100"

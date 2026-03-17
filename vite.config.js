@@ -1,5 +1,7 @@
 import { resolve } from "node:path";
 import { readFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { request as httpRequest } from "node:http";
 import { request as httpsRequest } from "node:https";
 import tailwindcss from "@tailwindcss/vite";
@@ -7,7 +9,29 @@ import react from "@vitejs/plugin-react";
 import { defineConfig, loadEnv } from "vite";
 const pkg = JSON.parse(readFileSync(resolve(__dirname, "package.json"), "utf-8"));
 const RUNTIME_CONNECTION_PATH = "/__openclaw/connection";
+const TOKEN_PATH = "/__openclaw/token";
 const GATEWAY_PROXY_PATH = "/gateway-ws";
+
+function readTokenFromConfig(home = homedir()) {
+    const candidates = [
+        join(home, ".openclaw", "openclaw.json"),
+        join(home, ".clawdbot", "clawdbot.json"),
+    ];
+    for (const filePath of candidates) {
+        try {
+            const raw = readFileSync(filePath, "utf-8");
+            const config = JSON.parse(raw);
+            const token = config?.gateway?.auth?.token;
+            if (typeof token === "string" && token.length > 0) return token;
+        } catch {}
+    }
+    return "";
+}
+
+function resolveGatewayToken(mode) {
+    const env = loadEnv(mode, process.cwd(), "");
+    return env.OPENCLAW_GATEWAY_TOKEN || readTokenFromConfig();
+}
 function normalizeGatewayTarget(rawTarget) {
     try {
         const parsed = new URL(rawTarget);
@@ -147,6 +171,7 @@ async function readJsonBody(req) {
 }
 export default defineConfig(({ mode }) => {
     const defaultGatewayTarget = resolveGatewayTarget(mode);
+    const gatewayToken = resolveGatewayToken(mode);
     let currentGatewayTarget = defaultGatewayTarget;
     return {
         define: {
@@ -161,8 +186,30 @@ export default defineConfig(({ mode }) => {
                     server.httpServer?.on("upgrade", (req, socket, head) => {
                         proxyGatewayUpgrade(req, socket, head, currentGatewayTarget);
                     });
+                    server.middlewares.use(TOKEN_PATH, (req, res) => {
+                        if (req.method !== "GET") {
+                            res.statusCode = 405;
+                            res.end("Method Not Allowed");
+                            return;
+                        }
+                        res.statusCode = 200;
+                        res.setHeader("Content-Type", "application/json; charset=utf-8");
+                        res.end(JSON.stringify({ token: gatewayToken }));
+                    });
+
                     server.middlewares.use(async (req, res, next) => {
                         const pathname = (req.url ?? "").split("?")[0];
+                        if (pathname === TOKEN_PATH || pathname === "/token") {
+                            if (req.method !== "GET") {
+                                res.statusCode = 405;
+                                res.end("Method Not Allowed");
+                                return;
+                            }
+                            res.statusCode = 200;
+                            res.setHeader("Content-Type", "application/json; charset=utf-8");
+                            res.end(JSON.stringify({ token: gatewayToken }));
+                            return;
+                        }
                         if (pathname !== RUNTIME_CONNECTION_PATH) {
                             next();
                             return;
@@ -214,6 +261,7 @@ export default defineConfig(({ mode }) => {
         },
         server: {
             port: 5180,
+            allowedHosts: true,
         },
     };
 });

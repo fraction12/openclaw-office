@@ -52,13 +52,17 @@
       "speaking": "回复中",
       "spawning": "创建中",
       "error": "错误",
-      "offline": "离线"
+      "offline": "离线",
+      "sleeping": "休眠中",
+      "stale": "状态过期",
+      "unknown": "未知",
+      "disconnected": "连接断开"
     }
   },
   "zones": {
-    "desk": "固定工位区",
+    "desk": "办公室",
     "meeting": "会议区",
-    "hotDesk": "热工位区",
+    "hotDesk": "子代理区",
     "lounge": "休息区"
   },
   "errors": {

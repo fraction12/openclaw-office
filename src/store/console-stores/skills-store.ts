@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { getAdapter, waitForAdapter } from "@/gateway/adapter-provider";
+import { getAdapterOrThrow } from "@/gateway/adapter-provider";
 import type { SkillInfo, SkillInstallResult } from "@/gateway/adapter-types";
 import i18n from "@/i18n";
 import { useConfigStore } from "@/store/console-stores/config-store";
@@ -95,8 +95,8 @@ export const useSkillsStore = create<SkillsStoreState>((set, get) => ({
   fetchSkills: async () => {
     set({ isLoading: true, error: null });
     try {
-      await waitForAdapter();
-      const skills = await getAdapter().skillsStatus();
+      getAdapterOrThrow();
+      const skills = await getAdapterOrThrow().skillsStatus();
       set({ skills, isLoading: false });
     } catch (err) {
       set({ error: String(err), isLoading: false });
@@ -111,7 +111,7 @@ export const useSkillsStore = create<SkillsStoreState>((set, get) => ({
 
   toggleSkill: async (skillKey, enabled) => {
     try {
-      const result = await getAdapter().skillsUpdate(skillKey, { enabled });
+      const result = await getAdapterOrThrow().skillsUpdate(skillKey, { enabled });
       if (result.ok) {
         set((s) => ({
           skills: s.skills.map((sk) => (sk.id === skillKey ? { ...sk, enabled } : sk)),
@@ -137,7 +137,7 @@ export const useSkillsStore = create<SkillsStoreState>((set, get) => ({
     set({ installing });
 
     try {
-      const result = await getAdapter().skillsInstall(name, installId);
+      const result = await getAdapterOrThrow().skillsInstall(name, installId);
       if (result.ok) {
         await get().fetchSkills();
         toastSuccess(i18n.t("console:skills.toast.installSuccess", { name }));

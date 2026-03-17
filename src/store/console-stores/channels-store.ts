@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { getAdapter, waitForAdapter } from "@/gateway/adapter-provider";
+import { getAdapterOrThrow } from "@/gateway/adapter-provider";
 import type { ChannelInfo, ChannelType } from "@/gateway/adapter-types";
 
 export type QrState = "idle" | "loading" | "qr" | "scanning" | "success" | "error" | "cancel";
@@ -39,8 +39,8 @@ export const useChannelsStore = create<ChannelsStoreState>((set, get) => ({
   fetchChannels: async () => {
     set({ isLoading: true, error: null });
     try {
-      await waitForAdapter();
-      const channels = await getAdapter().channelsStatus();
+      getAdapterOrThrow();
+      const channels = await getAdapterOrThrow().channelsStatus();
       set({ channels, isLoading: false });
     } catch (err) {
       set({ error: String(err), isLoading: false });
@@ -49,7 +49,7 @@ export const useChannelsStore = create<ChannelsStoreState>((set, get) => ({
 
   logoutChannel: async (channel, accountId) => {
     try {
-      await getAdapter().channelsLogout(channel, accountId);
+      await getAdapterOrThrow().channelsLogout(channel, accountId);
       await get().fetchChannels();
     } catch (err) {
       set({ error: String(err) });
@@ -81,11 +81,11 @@ export const useChannelsStore = create<ChannelsStoreState>((set, get) => ({
   startQrPairing: async () => {
     set({ qrState: "loading", qrError: null });
     try {
-      const result = await getAdapter().webLoginStart(true);
+      const result = await getAdapterOrThrow().webLoginStart(true);
       set({ qrState: "qr", qrDataUrl: result.qrDataUrl ?? null });
 
       set({ qrState: "scanning" });
-      const waitResult = await getAdapter().webLoginWait();
+      const waitResult = await getAdapterOrThrow().webLoginWait();
       if (waitResult.connected) {
         set({ qrState: "success" });
         await get().fetchChannels();

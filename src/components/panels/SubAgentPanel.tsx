@@ -1,13 +1,24 @@
+import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { Avatar } from "@/components/shared/Avatar";
 import type { AgentVisualStatus } from "@/gateway/types";
+import { getAgentDisplayName } from "@/lib/agent-identities";
 import { STATUS_COLORS } from "@/lib/constants";
-import { useOfficeStore } from "@/store/office-store";
+import { useOfficeStore } from "@/store";
+import { getAdapter } from "@/gateway/adapter-provider";
 
 export function SubAgentPanel() {
   const { t } = useTranslation();
   const agents = useOfficeStore((s) => s.agents);
   const selectAgent = useOfficeStore((s) => s.selectAgent);
+
+  const handleKill = useCallback(async (sessionKey: string) => {
+    const adapter = getAdapter();
+    if (!adapter) return;
+    try {
+      await adapter.chatAbort(sessionKey);
+    } catch { /* best-effort */ }
+  }, []);
 
   const subAgents = Array.from(agents.values()).filter((a) => a.isSubAgent);
 
@@ -24,6 +35,8 @@ export function SubAgentPanel() {
       {subAgents.map((sub) => {
         const parent = sub.parentAgentId ? agents.get(sub.parentAgentId) : null;
         const runtime = formatRuntime(sub.lastActiveAt, t);
+        const displayName = getAgentDisplayName(sub.id, sub.name);
+        const parentDisplayName = parent ? getAgentDisplayName(parent.id, parent.name) : null;
 
         return (
           <button
@@ -31,11 +44,11 @@ export function SubAgentPanel() {
             onClick={() => selectAgent(sub.id)}
             className="flex w-full items-start gap-2 border-b border-gray-50 px-3 py-2 text-left transition-colors hover:bg-blue-50 dark:border-gray-800 dark:hover:bg-blue-950"
           >
-            <Avatar agentId={sub.id} agentName={sub.name} size={24} />
+            <Avatar agentId={sub.id} agentName={displayName} size={24} />
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5">
                 <span className="truncate text-xs font-medium text-gray-800 dark:text-gray-200">
-                  {sub.name}
+                  {displayName}
                 </span>
                 <span
                   className="inline-flex items-center rounded px-1 py-0.5 text-[9px] font-medium text-white"
@@ -62,7 +75,7 @@ export function SubAgentPanel() {
                   }}
                   className="cursor-pointer text-[10px] text-blue-500 hover:underline"
                 >
-                  ← {parent.name}
+                  ← {parentDisplayName}
                 </span>
               )}
               {sub.speechBubble && (
@@ -70,7 +83,18 @@ export function SubAgentPanel() {
                   {sub.speechBubble.text.slice(0, 80)}
                 </div>
               )}
-              <div className="text-[10px] text-gray-400">{runtime}</div>
+              <div className="flex items-center gap-2 text-[10px] text-gray-400">
+                <span>{runtime}</span>
+                {sub.runId && (sub.status === "thinking" || sub.status === "tool_calling" || sub.status === "speaking") && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleKill(sub.runId!); }}
+                    className="rounded bg-red-100 px-1.5 py-0.5 text-[9px] font-medium text-red-600 hover:bg-red-200 dark:bg-red-900/40 dark:text-red-400"
+                    title="Kill sub-agent"
+                  >
+                    ■ Kill
+                  </button>
+                )}
+              </div>
             </div>
           </button>
         );

@@ -3,11 +3,12 @@ import { useTranslation } from "react-i18next";
 import { Outlet } from "react-router-dom";
 import { ChatDialog } from "@/components/chat/ChatDialog";
 import { ChatDockBar } from "@/components/chat/ChatDockBar";
+import { ErrorBoundary } from "@/components/shared/ErrorBoundary";
 import { RestartBanner } from "@/components/shared/RestartBanner";
 import { ToastContainer } from "@/components/shared/ToastContainer";
 import type { GatewayWsClient } from "@/gateway/ws-client";
 import { useChatDockStore } from "@/store/console-stores/chat-dock-store";
-import { useOfficeStore } from "@/store/office-store";
+import { useOfficeStore } from "@/store";
 import { Sidebar } from "./Sidebar";
 import { TopBar } from "./TopBar";
 
@@ -96,8 +97,10 @@ export function AppShell({ children, wsClient, isMobile = false }: AppShellProps
       <div className="relative flex flex-1 overflow-hidden">
         <main className="relative flex flex-1 flex-col overflow-hidden">
           <div className="relative flex-1 overflow-hidden">{content}</div>
-          <ChatDialog />
-          <ChatDockBar />
+          <ErrorBoundary name="Chat dock" resetKeys={[connectionStatus]}>
+            <ChatDialog />
+            <ChatDockBar />
+          </ErrorBoundary>
         </main>
         {isMobile ? (
           <>

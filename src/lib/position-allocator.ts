@@ -1,3 +1,4 @@
+import { getAgentDisplayName } from "@/lib/agent-identities";
 import {
   ZONES,
   DESK_GRID_COLS,
@@ -11,15 +12,14 @@ import {
   DESK_UNIT,
   MIN_DESK_WIDTH,
 } from "./constants";
+import { hashString } from "./avatar-generator";
 
-function hashString(str: string): number {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    const ch = str.charCodeAt(i);
-    hash = ((hash << 5) - hash + ch) | 0;
-  }
-  return Math.abs(hash);
-}
+const RESERVED_DESK_SLOTS: Record<string, number> = {
+  main: 0,
+  friday: 1,
+};
+
+export const RESERVED_DESK_AGENT_IDS = Object.keys(RESERVED_DESK_SLOTS);
 
 function gridPositions(
   zone: { x: number; y: number; width: number; height: number },
@@ -48,28 +48,55 @@ function posKey(pos: { x: number; y: number }): string {
   return `${pos.x},${pos.y}`;
 }
 
+export function reservedDeskSlotIndex(agentId: string): number | undefined {
+  return RESERVED_DESK_SLOTS[agentId];
+}
+
+export function getReservedDeskPosition(agentId: string): { x: number; y: number } | null {
+  const reservedIdx = reservedDeskSlotIndex(agentId);
+  if (reservedIdx === undefined) {
+    return null;
+  }
+  return deskPositions[reservedIdx] ?? null;
+}
+
+export function getReservedDeskNameplate(slotIndex: number): string | null {
+  for (const [agentId, idx] of Object.entries(RESERVED_DESK_SLOTS)) {
+    if (idx === slotIndex) {
+      return getAgentDisplayName(agentId, agentId);
+    }
+  }
+  return null;
+}
+
 export function allocatePosition(
   agentId: string,
   isSubAgent: boolean,
   occupied: Set<string>,
 ): { x: number; y: number } {
-  if (!isSubAgent) {
-    const hash = hashString(agentId);
-    const startIdx = hash % DESK_MAX_AGENTS;
-
-    for (let i = 0; i < DESK_MAX_AGENTS; i++) {
-      const idx = (startIdx + i) % DESK_MAX_AGENTS;
-      const pos = deskPositions[idx];
+  if (isSubAgent) {
+    for (const pos of hotDeskPositions) {
       if (!occupied.has(posKey(pos))) {
         return pos;
       }
     }
-  }
+  } else {
+    const reservedPos = getReservedDeskPosition(agentId);
+    if (reservedPos) {
+      return reservedPos;
+    }
 
-  // Fallback / SubAgent → Hot Desk Zone
-  for (const pos of hotDeskPositions) {
-    if (!occupied.has(posKey(pos))) {
-      return pos;
+    const startIdx = hashString(agentId) % DESK_MAX_AGENTS;
+
+    for (let i = 0; i < DESK_MAX_AGENTS; i++) {
+      const idx = (startIdx + i) % DESK_MAX_AGENTS;
+      if (Object.values(RESERVED_DESK_SLOTS).includes(idx)) {
+        continue;
+      }
+      const pos = deskPositions[idx];
+      if (!occupied.has(posKey(pos))) {
+        return pos;
+      }
     }
   }
 
@@ -168,7 +195,19 @@ export function calculateDeskSlots(
  * Ensures the same agent always ends up at the same desk.
  */
 export function agentSlotIndex(agentId: string, totalSlots: number): number {
-  return hashString(agentId) % totalSlots;
+  const reservedIdx = reservedDeskSlotIndex(agentId);
+  if (reservedIdx !== undefined && reservedIdx < totalSlots) {
+    return reservedIdx;
+  }
+
+  const reserved = new Set(Object.values(RESERVED_DESK_SLOTS).filter((idx) => idx < totalSlots));
+  const available = Array.from({ length: totalSlots }, (_, idx) => idx).filter((idx) => !reserved.has(idx));
+
+  if (available.length === 0) {
+    return hashString(agentId) % totalSlots;
+  }
+
+  return available[hashString(agentId) % available.length] ?? 0;
 }
 
 /**

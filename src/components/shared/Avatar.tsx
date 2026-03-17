@@ -1,4 +1,5 @@
 import { generateAvatar } from "@/lib/avatar-generator";
+import { getAgentDisplayName } from "@/lib/agent-identities";
 
 interface AvatarProps {
   agentId: string;
@@ -7,7 +8,8 @@ interface AvatarProps {
 }
 
 export function Avatar({ agentId, agentName, size = 32 }: AvatarProps) {
-  const { backgroundColor, textColor, initial } = generateAvatar(agentId, agentName);
+  const displayName = getAgentDisplayName(agentId, agentName);
+  const { backgroundColor, textColor, initial } = generateAvatar(agentId, displayName);
 
   return (
     <div

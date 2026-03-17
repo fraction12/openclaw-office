@@ -48,6 +48,7 @@ export class GatewayRpcClient {
       });
 
       timer = setTimeout(() => {
+        this.wsClient.removeResponseHandler(id);
         reject(new RpcError("TIMEOUT", `RPC request timed out: ${method}`));
       }, timeoutMs);
 

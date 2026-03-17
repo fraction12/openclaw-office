@@ -1,15 +1,19 @@
 import { useState, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { AgentDetailPanel } from "@/components/panels/AgentDetailPanel";
+import { CronPanel } from "@/components/panels/CronPanel";
 import { EventTimeline } from "@/components/panels/EventTimeline";
 import { MetricsPanel } from "@/components/panels/MetricsPanel";
+import { QuickSettingsPanel } from "@/components/panels/QuickSettingsPanel";
 import { SubAgentPanel } from "@/components/panels/SubAgentPanel";
 import { CollapsibleSection } from "@/components/shared/CollapsibleSection";
+import { ErrorBoundary } from "@/components/shared/ErrorBoundary";
 import { SvgAvatar } from "@/components/shared/SvgAvatar";
+import { getAgentDisplayName } from "@/lib/agent-identities";
 import type { AgentVisualStatus } from "@/gateway/types";
 import { useSidebarLayout } from "@/hooks/useSidebarLayout";
 import { STATUS_COLORS } from "@/lib/constants";
-import { useOfficeStore } from "@/store/office-store";
+import { useOfficeStore } from "@/store";
 
 type FilterTag = "all" | "active" | "idle" | "error";
 
@@ -27,7 +31,7 @@ export function Sidebar() {
   const [filter, setFilter] = useState<FilterTag>("all");
 
   const agentList = useMemo(() => {
-    let list = Array.from(agents.values());
+    let list = Array.from(agents.values()).filter((a) => !a.isSubAgent);
 
     if (search) {
       const q = search.toLowerCase();
@@ -74,6 +78,7 @@ export function Sidebar() {
   const metricsSection = getSection("metrics");
   const agentsSection = getSection("agents");
   const subAgentsSection = getSection("subAgents");
+  const cronSection = getSection("crons");
   const detailSection = getSection("detail");
   const timelineSection = getSection("timeline");
 
@@ -157,7 +162,7 @@ export function Sidebar() {
               <SvgAvatar agentId={agent.id} size={24} />
               <div className="min-w-0 flex-1">
                 <div className="truncate text-xs font-medium text-gray-800 dark:text-gray-200">
-                  {agent.name}
+                  {getAgentDisplayName(agent.id, agent.name)}
                 </div>
                 <div className="flex items-center gap-1.5">
                   <span
@@ -197,9 +202,27 @@ export function Sidebar() {
           maxHeight={300}
           badge={subAgents.length}
         >
-          <SubAgentPanel />
+          <ErrorBoundary name="Sub-agent panel" resetKeys={[subAgents.length]}>
+            <SubAgentPanel />
+          </ErrorBoundary>
         </CollapsibleSection>
       )}
+
+      {/* Cron jobs */}
+      <CollapsibleSection
+        id="crons"
+        title="Cron Jobs"
+        collapsed={cronSection.collapsed}
+        onToggle={() => toggleSection("crons")}
+        height={cronSection.height}
+        onHeightChange={(h) => setSectionHeight("crons", h)}
+        minHeight={60}
+        maxHeight={400}
+      >
+        <ErrorBoundary name="Cron panel">
+          <CronPanel />
+        </ErrorBoundary>
+      </CollapsibleSection>
 
       {/* Agent detail — only visible when an agent is selected */}
       {selectedAgentId && (
@@ -213,7 +236,9 @@ export function Sidebar() {
           minHeight={80}
           maxHeight={400}
         >
-          <AgentDetailPanel />
+          <ErrorBoundary name="Agent detail panel" resetKeys={[selectedAgentId]}>
+            <AgentDetailPanel />
+          </ErrorBoundary>
         </CollapsibleSection>
       )}
 
@@ -228,8 +253,17 @@ export function Sidebar() {
         minHeight={60}
         maxHeight={400}
       >
-        <EventTimeline />
+        <ErrorBoundary name="Event timeline panel">
+          <EventTimeline />
+        </ErrorBoundary>
       </CollapsibleSection>
+
+      {/* Quick settings / console nav */}
+      <div className="shrink-0 border-t border-gray-200 dark:border-gray-700">
+        <ErrorBoundary name="Quick settings panel">
+          <QuickSettingsPanel />
+        </ErrorBoundary>
+      </div>
     </aside>
   );
 }

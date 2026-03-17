@@ -81,7 +81,7 @@ const MOCK_SKILLS: SkillInfo[] = [
     id: "web-search",
     slug: "web-search",
     name: "Web Search",
-    description: "搜索互联网获取实时信息",
+    description: "Search the internet for real-time information",
     enabled: true,
     icon: "🔍",
     version: "1.0.0",
@@ -99,7 +99,7 @@ const MOCK_SKILLS: SkillInfo[] = [
     id: "code-interpreter",
     slug: "code-interpreter",
     name: "Code Interpreter",
-    description: "执行代码并返回结果",
+    description: "Execute code and return results",
     enabled: true,
     icon: "💻",
     version: "1.2.0",
@@ -113,7 +113,7 @@ const MOCK_SKILLS: SkillInfo[] = [
     id: "file-editor",
     slug: "file-editor",
     name: "File Editor",
-    description: "读写本地文件",
+    description: "Read and write local files",
     enabled: true,
     icon: "📝",
     version: "1.0.0",
@@ -127,7 +127,7 @@ const MOCK_SKILLS: SkillInfo[] = [
     id: "image-gen",
     slug: "image-gen",
     name: "Image Generation",
-    description: "使用 AI 生成图片",
+    description: "Generate images using AI",
     enabled: true,
     icon: "🎨",
     version: "0.9.0",
@@ -141,7 +141,7 @@ const MOCK_SKILLS: SkillInfo[] = [
     id: "playwright",
     slug: "playwright",
     name: "Playwright",
-    description: "浏览器自动化与测试",
+    description: "Browser automation and testing",
     enabled: true,
     icon: "🎭",
     version: "1.1.0",
@@ -159,7 +159,7 @@ const MOCK_SKILLS: SkillInfo[] = [
     id: "voice-call",
     slug: "voice-call",
     name: "Voice Call",
-    description: "语音通话技能",
+    description: "Voice calling skill",
     enabled: false,
     icon: "📞",
     version: "0.5.0",
@@ -173,15 +173,15 @@ const MOCK_SKILLS: SkillInfo[] = [
 const MOCK_CRON_TASKS: CronTask[] = [
   {
     id: "cron-1",
-    name: "每日摘要",
-    description: "每天下午6点生成工作摘要",
+    name: "Daily Summary",
+    description: "Generate a work summary every day at 6 PM",
     schedule: { kind: "cron", expr: "0 18 * * *" },
     enabled: true,
     createdAtMs: Date.now() - 7 * 86400_000,
     updatedAtMs: Date.now() - 86400_000,
     sessionTarget: "main",
     wakeMode: "now",
-    payload: { kind: "agentTurn", message: "生成今日工作摘要" },
+    payload: { kind: "agentTurn", message: "Generate today's work summary" },
     delivery: { mode: "notify", channel: "telegram", target: "bot1" },
     state: {
       lastRunAtMs: Date.now() - 86400_000,
@@ -191,27 +191,27 @@ const MOCK_CRON_TASKS: CronTask[] = [
   },
   {
     id: "cron-2",
-    name: "周报提醒",
-    description: "每周一早上9点发送周报提醒",
+    name: "Weekly Report Reminder",
+    description: "Send a weekly report reminder every Monday at 9 AM",
     schedule: { kind: "cron", expr: "0 9 * * 1" },
     enabled: false,
     createdAtMs: Date.now() - 14 * 86400_000,
     updatedAtMs: Date.now() - 3 * 86400_000,
     sessionTarget: "isolated",
     wakeMode: "next-heartbeat",
-    payload: { kind: "agentTurn", message: "请提交本周周报" },
+    payload: { kind: "agentTurn", message: "Please submit this week's report" },
     state: { lastRunAtMs: Date.now() - 7 * 86400_000, lastRunStatus: "ok" },
   },
   {
     id: "cron-3",
-    name: "健康检查",
+    name: "Health Check",
     schedule: { kind: "every", everyMs: 1800_000 },
     enabled: true,
     createdAtMs: Date.now() - 30 * 86400_000,
     updatedAtMs: Date.now(),
     sessionTarget: "main",
     wakeMode: "now",
-    payload: { kind: "agentTurn", message: "执行系统健康检查" },
+    payload: { kind: "agentTurn", message: "Run a system health check" },
     state: {
       lastRunAtMs: Date.now() - 1200_000,
       lastRunStatus: "error",
@@ -388,7 +388,7 @@ class SubAgentSimulator {
 
     this.activeSubAgents.add(subId);
 
-    // lifecycle start
+    // Lifecycle start
     this.emit("agent", {
       runId,
       seq: 1,
@@ -398,7 +398,7 @@ class SubAgentSimulator {
       sessionKey,
     });
 
-    // thinking phase
+    // Thinking phase
     this.schedule(() => {
       if (!this.running) return;
       this.emit("agent", {
@@ -406,12 +406,12 @@ class SubAgentSimulator {
         seq: 2,
         stream: "assistant",
         ts: Date.now(),
-        data: { text: `Sub-agent ${subId} 正在分析任务...` },
+        data: { text: `Sub-agent ${subId} is analyzing the task...` },
         sessionKey,
       });
     }, randRange(1000, 2000));
 
-    // tool calling phase
+    // Tool-calling phase
     this.schedule(() => {
       if (!this.running) return;
       const tools = ["web_search", "code_exec", "file_read", "analyze_data"];
@@ -426,7 +426,7 @@ class SubAgentSimulator {
       });
     }, randRange(3000, 5000));
 
-    // speaking phase
+    // Speaking phase
     this.schedule(() => {
       if (!this.running) return;
       this.emit("agent", {
@@ -434,12 +434,12 @@ class SubAgentSimulator {
         seq: 4,
         stream: "assistant",
         ts: Date.now(),
-        data: { text: `Sub-agent ${subId} 已完成任务分析。` },
+        data: { text: `Sub-agent ${subId} has completed the task analysis.` },
         sessionKey,
       });
     }, randRange(6000, 9000));
 
-    // lifecycle end
+    // Lifecycle end
     const endDelay = randRange(8000, 15_000);
     this.schedule(() => {
       if (!this.running) return;
@@ -467,7 +467,7 @@ class SubAgentSimulator {
       const runIdA = `a2a-run-${a}-${Date.now()}`;
       const runIdB = `a2a-run-${b}-${Date.now()}`;
 
-      // Both agents start in the same session (triggers collaboration link)
+      // Both agents start in the same session (which triggers the collaboration link)
       this.emit("agent", {
         runId: runIdA,
         seq: 1,
@@ -485,7 +485,7 @@ class SubAgentSimulator {
         sessionKey,
       });
 
-      // End communication after some time
+      // End the communication after some time
       const commDuration = randRange(10_000, 20_000);
       this.schedule(() => {
         if (!this.running) return;
@@ -527,7 +527,7 @@ export class MockAdapter implements GatewayAdapter {
       }
     }, 30_000);
 
-    // Start sub-agent simulator after connection
+    // Start the sub-agent simulator after connecting
     this.subAgentSimulator = new SubAgentSimulator(
       (event, payload) => this.emit(event, payload),
       3,
@@ -576,14 +576,14 @@ export class MockAdapter implements GatewayAdapter {
       {
         id: "msg-hist-1",
         role: "user",
-        content: "你好，请介绍一下 OpenClaw",
+        content: "Hello, please introduce OpenClaw",
         timestamp: Date.now() - 120_000,
       },
       {
         id: "msg-hist-2",
         role: "assistant",
         content:
-          "**OpenClaw** 是一个多 Agent 协作系统，支持：\n\n- 多渠道消息接入（Telegram、Discord、WhatsApp 等）\n- 工具调用和技能扩展\n- 定时任务调度\n- 实时可视化监控\n\n你可以通过 OpenClaw Office 观察 Agent 的协作行为。",
+          "**OpenClaw** is a multi-agent collaboration system that supports:\n\n- Multi-channel messaging integration (Telegram, Discord, WhatsApp, etc.)\n- Tool calling and skill extensions\n- Scheduled task automation\n- Real-time visual monitoring\n\nYou can use OpenClaw Office to observe how agents collaborate.",
         timestamp: Date.now() - 110_000,
       },
     ];
@@ -591,7 +591,7 @@ export class MockAdapter implements GatewayAdapter {
 
   async chatSend(params: ChatSendParams): Promise<void> {
     const runId = `mock-run-${Date.now()}`;
-    const responseText = `收到你的消息：「${params.text}」\n\n这是 Mock 模式下的模拟回复。在连接真实 Gateway 后，这里将显示 Agent 的实际响应。`;
+    const responseText = `Received your message: "${params.text}"\n\nThis is a simulated reply in Mock mode. Once connected to a real Gateway, the agent's actual response will appear here.`;
 
     // Simulate Gateway chat events: delta → delta → final
     this.scheduleTimer(() => {
@@ -656,7 +656,7 @@ export class MockAdapter implements GatewayAdapter {
       {
         key: "agent:main:main",
         agentId: "main",
-        label: "默认会话",
+        label: "Default Session",
         createdAt: Date.now() - 3600_000,
         lastActiveAt: Date.now(),
         messageCount: 12,
@@ -664,7 +664,7 @@ export class MockAdapter implements GatewayAdapter {
       {
         key: "agent:main:feishu:direct:test-user",
         agentId: "main",
-        label: "飞书会话",
+        label: "Feishu Session",
         createdAt: Date.now() - 1800_000,
         lastActiveAt: Date.now() - 60_000,
         messageCount: 8,
@@ -832,12 +832,12 @@ export class MockAdapter implements GatewayAdapter {
   async toolsCatalog(_agentId?: string): Promise<ToolCatalog> {
     return {
       tools: [
-        { name: "web_search", description: "搜索互联网", source: "built-in", group: "core", enabled: true },
-        { name: "code_exec", description: "执行代码", source: "built-in", group: "core", enabled: true },
-        { name: "file_read", description: "读取文件内容", source: "built-in", group: "fs", enabled: true },
-        { name: "file_write", description: "写入文件", source: "built-in", group: "fs", enabled: true },
-        { name: "bash", description: "执行 Bash 命令", source: "built-in", group: "exec", enabled: true, optional: true },
-        { name: "mcp_client", description: "MCP 协议客户端", source: "plugin", group: "integrations", enabled: false, optional: true },
+        { name: "web_search", description: "Search the internet", source: "built-in", group: "core", enabled: true },
+        { name: "code_exec", description: "Execute code", source: "built-in", group: "core", enabled: true },
+        { name: "file_read", description: "Read file contents", source: "built-in", group: "fs", enabled: true },
+        { name: "file_write", description: "Write file", source: "built-in", group: "fs", enabled: true },
+        { name: "bash", description: "Execute Bash commands", source: "built-in", group: "exec", enabled: true, optional: true },
+        { name: "mcp_client", description: "MCP protocol client", source: "plugin", group: "integrations", enabled: false, optional: true },
       ],
     };
   }

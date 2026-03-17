@@ -14,13 +14,14 @@ function canUseLocalStorage() {
 
 export function readConnectionPreference(): ConnectionPreference | null {
   if (!canUseLocalStorage()) {
-    return null;
+    return { mode: "local", gatewayUrl: "", gatewayToken: "" };
   }
 
   try {
     const raw = window.localStorage.getItem(CONNECTION_PREFERENCE_KEY);
     if (!raw) {
-      return null;
+      // Auto-default to local mode — skip the setup dialog
+      return { mode: "local", gatewayUrl: "", gatewayToken: "" };
     }
 
     const parsed = JSON.parse(raw) as Partial<ConnectionPreference>;

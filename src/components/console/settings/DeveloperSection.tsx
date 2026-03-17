@@ -21,11 +21,11 @@ export function DeveloperSection() {
     | undefined;
   const tokenConfigured = gatewayAuth?.token === REDACTED_SENTINEL;
   const injected = (window as unknown as Record<string, unknown>).__OPENCLAW_CONFIG__ as
-    | { gatewayUrl?: string; gatewayToken?: string }
+    | { gatewayUrl?: string }
     | undefined;
   const gatewayConnection = resolveGatewayConnectionConfig(
     injected?.gatewayUrl || import.meta.env.VITE_GATEWAY_URL,
-    injected?.gatewayToken || import.meta.env.VITE_GATEWAY_TOKEN,
+    import.meta.env.VITE_GATEWAY_TOKEN,
     window.location,
     { preferSameOriginProxy: import.meta.env.DEV },
   );

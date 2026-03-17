@@ -1,8 +1,9 @@
 import { ChevronDown, Plus, MessageSquare } from "lucide-react";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
+import { getAgentDisplayName } from "@/lib/agent-identities";
 import { useChatDockStore } from "@/store/console-stores/chat-dock-store";
-import { useOfficeStore } from "@/store/office-store";
+import { useOfficeStore } from "@/store";
 
 function formatSessionName(key: string): string {
   const parts = key.split(":");
@@ -147,7 +148,7 @@ export function SessionSwitcher() {
                 >
                   <Plus className="h-3.5 w-3.5 text-green-500" />
                   <span className="truncate">
-                    {t("sessionSwitcher.newSessionWith", { agent: agent.name })}
+                    {t("sessionSwitcher.newSessionWith", { agent: getAgentDisplayName(agent.id, agent.name) })}
                   </span>
                 </button>
               ))}

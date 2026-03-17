@@ -9,7 +9,7 @@ import { StatCard } from "@/components/console/dashboard/StatCard";
 import { ErrorState } from "@/components/console/shared/ErrorState";
 import { LoadingState } from "@/components/console/shared/LoadingState";
 import { useDashboardStore } from "@/store/console-stores/dashboard-store";
-import { useOfficeStore } from "@/store/office-store";
+import { useOfficeStore } from "@/store";
 
 export function DashboardPage() {
   const { t } = useTranslation("console");
@@ -17,11 +17,15 @@ export function DashboardPage() {
   const wsStatus = useOfficeStore((s) => s.connectionStatus);
 
   useEffect(() => {
-    refresh();
-  }, [refresh]);
+    if (wsStatus === "connected") {
+      refresh();
+    }
+  }, [refresh, wsStatus]);
 
-  if (isLoading && channelsSummary.length === 0) {
-    const isDisconnected = wsStatus !== "connected" && wsStatus !== "connecting";
+  // Debug overlay — remove after diagnosis
+
+  if ((isLoading || wsStatus !== "connected") && channelsSummary.length === 0) {
+    const isDisconnected = wsStatus !== "connected" && wsStatus !== "connecting" && wsStatus !== "reconnecting";
     return (
       <div className="space-y-6">
         <PageHeader
@@ -29,6 +33,9 @@ export function DashboardPage() {
           description={t("dashboard.description")}
           onRefresh={refresh}
         />
+        <div className="rounded bg-gray-800 px-3 py-2 text-xs text-gray-300 font-mono">
+          ws={wsStatus} | loading={String(isLoading)} | error={error ?? "none"}
+        </div>
         {isDisconnected ? (
           <GatewayConnectionGuide status={wsStatus} onRetry={refresh} />
         ) : (

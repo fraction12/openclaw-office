@@ -1,7 +1,9 @@
 import { useEffect, useRef } from "react";
 import type { GatewayRpcClient } from "@/gateway/rpc-client";
 import type { TokenSnapshot } from "@/gateway/types";
-import { useOfficeStore } from "@/store/office-store";
+import { useOfficeStore } from "@/store";
+import { evidenceStore } from "@/store/evidence-store";
+import { rederiveAllAgentStates } from "@/store/event-orchestrator";
 
 const POLL_INTERVAL_MS = 60_000;
 const FAILURE_THRESHOLD = 3;
@@ -57,18 +59,36 @@ export function useUsagePoller(rpcRef: React.RefObject<GatewayRpcClient | null>)
 
         const resolved = resolveTokenSnapshot(statusResp);
 
+        const now = Date.now();
         if (resolved) {
           pushTokenSnapshot({
-            timestamp: Date.now(),
+            timestamp: now,
             total: resolved.total,
             byAgent: resolved.byAgent,
           });
+          for (const agentId of Object.keys(resolved.byAgent)) {
+            const agent = useOfficeStore.getState().agents.get(agentId);
+            if (!agent) continue;
+            if (agent.status !== "spawning" && agent.status !== "offline") {
+              evidenceStore.setHttpSessionStatus(agentId, agent.status, now);
+            }
+            if (agent.currentTool?.name) {
+              evidenceStore.setHttpLastTool(agentId, agent.currentTool.name, now);
+            } else {
+              evidenceStore.touchHttp(agentId, now);
+            }
+          }
         }
 
         const costs = costResp?.byAgent ?? costResp?.costs ?? {};
         if (Object.keys(costs).length > 0) {
           setAgentCosts(costs);
         }
+        rederiveAllAgentStates(
+          useOfficeStore.getState() as never,
+          (updater) => useOfficeStore.setState((state) => { updater(state as never); }),
+          now,
+        );
       } catch {
         failureCountRef.current += 1;
 

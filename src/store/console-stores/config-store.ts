@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { waitForAdapter } from "@/gateway/adapter-provider";
+import { getAdapterOrThrow } from "@/gateway/adapter-provider";
 import type {
   ConfigPatchResult,
   ConfigSchemaResponse,
@@ -217,7 +217,7 @@ export const useConfigStore = create<ConfigStoreState>((set, get) => ({
   fetchConfig: async () => {
     set({ loading: true, error: null });
     try {
-      const adapter = await waitForAdapter();
+      const adapter = getAdapterOrThrow();
       const snap: ConfigSnapshot = await adapter.configGet();
       set({
         config: snap.config,
@@ -244,7 +244,7 @@ export const useConfigStore = create<ConfigStoreState>((set, get) => ({
     }
 
     try {
-      const adapter = await waitForAdapter();
+      const adapter = getAdapterOrThrow();
       const nextConfig = updater(structuredClone(currentConfig));
       const result = await adapter.configSet(JSON.stringify(nextConfig), hash);
       if (result.ok) {
@@ -289,7 +289,7 @@ export const useConfigStore = create<ConfigStoreState>((set, get) => ({
     }
 
     try {
-      const adapter = await waitForAdapter();
+      const adapter = getAdapterOrThrow();
       const nextConfig = updater(structuredClone(currentConfig));
       const result = await adapter.configApply(JSON.stringify(nextConfig), hash, params);
       if (result.ok) {
@@ -321,7 +321,7 @@ export const useConfigStore = create<ConfigStoreState>((set, get) => ({
   patchConfig: async (patch) => {
     const { hash } = get();
     try {
-      const adapter = await waitForAdapter();
+      const adapter = getAdapterOrThrow();
       const raw = JSON.stringify(patch);
       const result = await adapter.configPatch(raw, hash ?? undefined);
       if (result.ok) {
@@ -350,7 +350,7 @@ export const useConfigStore = create<ConfigStoreState>((set, get) => ({
 
   fetchSchema: async () => {
     try {
-      const adapter = await waitForAdapter();
+      const adapter = getAdapterOrThrow();
       const schema = await adapter.configSchema();
       set({ schemaHints: schema });
     } catch {
@@ -361,7 +361,7 @@ export const useConfigStore = create<ConfigStoreState>((set, get) => ({
   fetchStatus: async () => {
     set({ statusLoading: true, statusError: null });
     try {
-      const adapter = await waitForAdapter();
+      const adapter = getAdapterOrThrow();
       const status = await adapter.statusSummary();
       set({ status, statusLoading: false });
     } catch (err) {
@@ -372,7 +372,7 @@ export const useConfigStore = create<ConfigStoreState>((set, get) => ({
   fetchCatalogModels: async () => {
     set({ catalogLoading: true });
     try {
-      const adapter = await waitForAdapter();
+      const adapter = getAdapterOrThrow();
       const models = await adapter.modelsList();
       set({ catalogModels: models, catalogLoading: false });
     } catch {
@@ -383,7 +383,7 @@ export const useConfigStore = create<ConfigStoreState>((set, get) => ({
   runUpdate: async (params) => {
     set({ updateLoading: true, updateResult: null });
     try {
-      const adapter = await waitForAdapter();
+      const adapter = getAdapterOrThrow();
       const result = await adapter.updateRun(params);
       set({ updateResult: result, updateLoading: false });
       return result;

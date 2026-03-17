@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import type { AdapterEventHandler } from "@/gateway/adapter";
-import { getAdapter, waitForAdapter } from "@/gateway/adapter-provider";
+import { getAdapterOrThrow } from "@/gateway/adapter-provider";
 import type { CronTask, CronTaskInput, CronJobState } from "@/gateway/adapter-types";
 import { useConfigStore } from "@/store/console-stores/config-store";
 
@@ -35,8 +35,8 @@ export const useCronStore = create<CronStoreState>((set, get) => ({
   fetchTasks: async () => {
     set({ isLoading: true, error: null });
     try {
-      await waitForAdapter();
-      const tasks = await getAdapter().cronList();
+      getAdapterOrThrow();
+      const tasks = await getAdapterOrThrow().cronList();
       set({ tasks, isLoading: false });
     } catch (err) {
       set({ error: String(err), isLoading: false });
@@ -45,7 +45,7 @@ export const useCronStore = create<CronStoreState>((set, get) => ({
 
   addTask: async (input) => {
     try {
-      const task = await getAdapter().cronAdd(input);
+      const task = await getAdapterOrThrow().cronAdd(input);
       set((s) => ({ tasks: [...s.tasks, task], dialogOpen: false, editingTask: null }));
       useConfigStore.getState().setRuntimeApplied("configLifecycle.runtimeCron");
     } catch (err) {
@@ -55,7 +55,7 @@ export const useCronStore = create<CronStoreState>((set, get) => ({
 
   updateTask: async (id, patch) => {
     try {
-      const updated = await getAdapter().cronUpdate(id, patch);
+      const updated = await getAdapterOrThrow().cronUpdate(id, patch);
       set((s) => ({
         tasks: s.tasks.map((t) => (t.id === id ? updated : t)),
         dialogOpen: false,
@@ -69,7 +69,7 @@ export const useCronStore = create<CronStoreState>((set, get) => ({
 
   removeTask: async (id) => {
     try {
-      await getAdapter().cronRemove(id);
+      await getAdapterOrThrow().cronRemove(id);
       set((s) => ({ tasks: s.tasks.filter((t) => t.id !== id) }));
       useConfigStore.getState().setRuntimeApplied("configLifecycle.runtimeCron");
     } catch (err) {
@@ -79,7 +79,7 @@ export const useCronStore = create<CronStoreState>((set, get) => ({
 
   runTask: async (id) => {
     try {
-      await getAdapter().cronRun(id);
+      await getAdapterOrThrow().cronRun(id);
       useConfigStore.getState().setRuntimeApplied("configLifecycle.runtimeCron");
     } catch (err) {
       set({ error: String(err) });
@@ -107,10 +107,10 @@ export const useCronStore = create<CronStoreState>((set, get) => ({
     let disposed = false;
     let unsubscribe = () => {};
 
-    void waitForAdapter()
+    void Promise.resolve(getAdapterOrThrow())
       .then(() => {
         if (disposed) return;
-        unsubscribe = getAdapter().onEvent(handler);
+        unsubscribe = getAdapterOrThrow().onEvent(handler);
       })
       .catch(() => {
         unsubscribe = () => {};

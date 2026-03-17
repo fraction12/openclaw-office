@@ -1,7 +1,9 @@
 import { useEffect, useRef } from "react";
 import type { GatewayRpcClient } from "@/gateway/rpc-client";
 import type { SubAgentInfo } from "@/gateway/types";
-import { useOfficeStore } from "@/store/office-store";
+import { useOfficeStore } from "@/store";
+import { evidenceStore } from "@/store/evidence-store";
+import { rederiveAllAgentStates } from "@/store/event-orchestrator";
 
 const POLL_INTERVAL_MS = 3_000;
 
@@ -88,11 +90,16 @@ export function useSubAgentPoller(rpcClient: React.RefObject<GatewayRpcClient | 
       try {
         const resp = await rpc.request<SessionsListResponse>("sessions.list");
         const nextSubs = toSubAgentInfoList(resp.sessions ?? []);
+        const fetchedAt = Date.now();
 
         // Read snapshot from store directly to avoid stale closure
         const currentSnapshot = useOfficeStore.getState().lastSessionsSnapshot;
         const prevSubs = currentSnapshot?.sessions ?? [];
         const { added, removed } = diffSessions(prevSubs, nextSubs);
+
+        for (const sub of nextSubs) {
+          evidenceStore.setHttpSessionStatus(sub.agentId, "idle", fetchedAt);
+        }
 
         for (const sub of added) {
           const parentId = resolveParentAgent(sub.requesterSessionKey);
@@ -107,7 +114,12 @@ export function useSubAgentPoller(rpcClient: React.RefObject<GatewayRpcClient | 
           }
         }
 
-        useOfficeStore.getState().setSessionsSnapshot({ sessions: nextSubs, fetchedAt: Date.now() });
+        useOfficeStore.getState().setSessionsSnapshot({ sessions: nextSubs, fetchedAt });
+        rederiveAllAgentStates(
+          useOfficeStore.getState() as never,
+          (updater) => useOfficeStore.setState((state) => { updater(state as never); }),
+          fetchedAt,
+        );
       } catch {
         // RPC failure — skip this cycle
       }

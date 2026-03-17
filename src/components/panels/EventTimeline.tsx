@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { AgentStream } from "@/gateway/types";
 import { STATUS_COLORS } from "@/lib/constants";
-import { useOfficeStore } from "@/store/office-store";
+import { useOfficeStore } from "@/store";
 
 const STREAM_ICONS: Record<AgentStream, string> = {
   lifecycle: "●",
@@ -11,7 +11,16 @@ const STREAM_ICONS: Record<AgentStream, string> = {
   error: "⚠",
 };
 
-const MAX_DISPLAY = 50;
+const MAX_DISPLAY = 100;
+
+type TimeRange = "all" | "5m" | "15m" | "1h" | "6h";
+const TIME_RANGES: { key: TimeRange; label: string; ms: number }[] = [
+  { key: "5m", label: "5m", ms: 5 * 60_000 },
+  { key: "15m", label: "15m", ms: 15 * 60_000 },
+  { key: "1h", label: "1h", ms: 60 * 60_000 },
+  { key: "6h", label: "6h", ms: 6 * 60 * 60_000 },
+  { key: "all", label: "All", ms: Infinity },
+];
 
 export function EventTimeline() {
   const { t } = useTranslation("panels");
@@ -19,9 +28,22 @@ export function EventTimeline() {
   const selectAgent = useOfficeStore((s) => s.selectAgent);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [autoScroll, setAutoScroll] = useState(true);
+  const [timeRange, setTimeRange] = useState<TimeRange>("all");
+  const [streamFilter, setStreamFilter] = useState<AgentStream | "all">("all");
   const prevLenRef = useRef(0);
 
-  const displayEvents = eventHistory.slice(-MAX_DISPLAY);
+  const displayEvents = useMemo(() => {
+    const now = Date.now();
+    const rangeMs = TIME_RANGES.find((r) => r.key === timeRange)?.ms ?? Infinity;
+    let filtered = eventHistory;
+    if (rangeMs < Infinity) {
+      filtered = filtered.filter((e) => now - e.timestamp < rangeMs);
+    }
+    if (streamFilter !== "all") {
+      filtered = filtered.filter((e) => e.stream === streamFilter);
+    }
+    return filtered.slice(-MAX_DISPLAY);
+  }, [eventHistory, timeRange, streamFilter]);
 
   useEffect(() => {
     if (autoScroll && scrollRef.current && eventHistory.length > prevLenRef.current) {
@@ -40,6 +62,42 @@ export function EventTimeline() {
   };
 
   return (
+    <div className="flex flex-1 flex-col overflow-hidden">
+      {/* Filter bar */}
+      <div className="flex shrink-0 items-center gap-1 border-b border-gray-100 px-2 py-1 dark:border-gray-800">
+        {TIME_RANGES.map((r) => (
+          <button
+            key={r.key}
+            onClick={() => setTimeRange(r.key)}
+            className={`rounded px-1.5 py-0.5 text-[9px] font-medium transition-colors ${
+              timeRange === r.key
+                ? "bg-blue-600 text-white"
+                : "text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800"
+            }`}
+          >
+            {r.label}
+          </button>
+        ))}
+        <span className="mx-1 text-gray-200 dark:text-gray-700">|</span>
+        <button
+          onClick={() => setStreamFilter("all")}
+          className={`rounded px-1 py-0.5 text-[9px] ${streamFilter === "all" ? "bg-gray-200 dark:bg-gray-700" : "text-gray-400"}`}
+        >
+          All
+        </button>
+        {(Object.keys(STREAM_ICONS) as AgentStream[]).map((s) => (
+          <button
+            key={s}
+            onClick={() => setStreamFilter(s)}
+            className={`rounded px-1 py-0.5 text-[9px] ${streamFilter === s ? "bg-gray-200 dark:bg-gray-700" : "text-gray-400"}`}
+            title={s}
+          >
+            {STREAM_ICONS[s]}
+          </button>
+        ))}
+        <span className="ml-auto text-[9px] text-gray-400">{displayEvents.length}</span>
+      </div>
+
     <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto">
       {!autoScroll && eventHistory.length > 0 && (
         <div className="sticky top-0 z-10 flex justify-end bg-white/80 px-2 py-0.5 backdrop-blur-sm dark:bg-gray-900/80">
@@ -87,6 +145,7 @@ export function EventTimeline() {
           {t("common:empty.noEvents")}
         </div>
       )}
+    </div>
     </div>
   );
 }

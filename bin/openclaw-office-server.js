@@ -29,7 +29,6 @@ export const MIME_TYPES = {
 export function createRuntimeConfigScript(config) {
   const runtimeConfig = JSON.stringify({
     gatewayUrl: config.browserGatewayUrl,
-    gatewayToken: config.token,
   });
   return `<script>window.__OPENCLAW_CONFIG__=${runtimeConfig};</script>`;
 }
@@ -238,6 +237,45 @@ async function readJsonBody(req) {
   return JSON.parse(Buffer.concat(chunks).toString("utf-8"));
 }
 
+function isLoopbackHost(hostname) {
+  const normalized = hostname.toLowerCase();
+  return (
+    normalized === "localhost" ||
+    normalized === "127.0.0.1" ||
+    normalized === "::1" ||
+    normalized === "[::1]"
+  );
+}
+
+function isAllowedTokenRequest(req) {
+  const hostHeader = req.headers.host;
+  if (!hostHeader) {
+    return false;
+  }
+
+  let requestUrl;
+  try {
+    requestUrl = new URL(req.url || "/", `http://${hostHeader}`);
+  } catch {
+    return false;
+  }
+
+  if (isLoopbackHost(requestUrl.hostname)) {
+    return true;
+  }
+
+  const originHeader = req.headers.origin;
+  if (!originHeader) {
+    return false;
+  }
+
+  try {
+    return new URL(originHeader).host === hostHeader;
+  } catch {
+    return false;
+  }
+}
+
 export function createOfficeServer({
   config,
   distDir,
@@ -262,6 +300,24 @@ export function createOfficeServer({
   const server = createHttpServer(async (req, res) => {
     const url = new URL(req.url || "/", `http://${req.headers.host || "localhost"}`);
     const pathname = decodeURIComponent(url.pathname);
+
+    if (pathname === "/__openclaw/token") {
+      if (req.method !== "GET") {
+        res.writeHead(405, { "Content-Type": "text/plain; charset=utf-8" });
+        res.end("Method Not Allowed");
+        return;
+      }
+
+      if (!isAllowedTokenRequest(req)) {
+        res.writeHead(403, { "Content-Type": "text/plain; charset=utf-8" });
+        res.end("Forbidden");
+        return;
+      }
+
+      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({ token: config.token || "" }));
+      return;
+    }
 
     if (pathname === RUNTIME_CONNECTION_PATH) {
       if (req.method === "GET") {

@@ -1,4 +1,5 @@
-import { resolve } from "node:path";
+import { homedir } from "node:os";
+import { resolve, join } from "node:path";
 import { readFileSync } from "node:fs";
 import type { IncomingMessage } from "node:http";
 import { request as httpRequest } from "node:http";
@@ -10,6 +11,7 @@ import { defineConfig, loadEnv } from "vite";
 
 const pkg = JSON.parse(readFileSync(resolve(__dirname, "package.json"), "utf-8"));
 const RUNTIME_CONNECTION_PATH = "/__openclaw/connection";
+const TOKEN_PATH = "/__openclaw/token";
 const GATEWAY_PROXY_PATH = "/gateway-ws";
 
 function normalizeGatewayTarget(rawTarget: string) {
@@ -24,6 +26,72 @@ function normalizeGatewayTarget(rawTarget: string) {
     return parsed.toString();
   } catch {
     return rawTarget;
+  }
+}
+
+function readTokenFromConfig(homeDir = homedir()) {
+  const candidates = [
+    join(homeDir, ".openclaw", "openclaw.json"),
+    join(homeDir, ".clawdbot", "clawdbot.json"),
+  ];
+
+  for (const filePath of candidates) {
+    try {
+      const raw = readFileSync(filePath, "utf-8");
+      const config = JSON.parse(raw) as { gateway?: { auth?: { token?: string } } };
+      const token = config.gateway?.auth?.token;
+      if (typeof token === "string" && token.length > 0) {
+        return token;
+      }
+    } catch {
+      // ignore missing or malformed files
+    }
+  }
+
+  return "";
+}
+
+function resolveGatewayToken(mode: string) {
+  const env = loadEnv(mode, process.cwd(), "");
+  return env.OPENCLAW_GATEWAY_TOKEN || readTokenFromConfig();
+}
+
+function isLoopbackHost(hostname: string) {
+  const normalized = hostname.toLowerCase();
+  return (
+    normalized === "localhost" ||
+    normalized === "127.0.0.1" ||
+    normalized === "::1" ||
+    normalized === "[::1]"
+  );
+}
+
+function isAllowedTokenRequest(req: IncomingMessage) {
+  const hostHeader = req.headers.host;
+  if (!hostHeader) {
+    return false;
+  }
+
+  let requestUrl: URL;
+  try {
+    requestUrl = new URL(req.url || "/", `http://${hostHeader}`);
+  } catch {
+    return false;
+  }
+
+  if (isLoopbackHost(requestUrl.hostname)) {
+    return true;
+  }
+
+  const originHeader = req.headers.origin;
+  if (!originHeader) {
+    return false;
+  }
+
+  try {
+    return new URL(originHeader).host === hostHeader;
+  } catch {
+    return false;
   }
 }
 
@@ -192,6 +260,7 @@ async function readJsonBody(req: IncomingMessage) {
 
 export default defineConfig(({ mode }) => {
   const defaultGatewayTarget = resolveGatewayTarget(mode);
+  const gatewayToken = resolveGatewayToken(mode);
   let currentGatewayTarget = defaultGatewayTarget;
 
   return {
@@ -203,13 +272,39 @@ export default defineConfig(({ mode }) => {
       tailwindcss(),
       {
         name: "openclaw-dev-connection",
+        enforce: "pre",
         configureServer(server) {
           server.httpServer?.on("upgrade", (req, socket, head) => {
             proxyGatewayUpgrade(req, socket, head, currentGatewayTarget);
           });
 
+          server.middlewares.use(TOKEN_PATH, (req, res) => {
+            if (req.method !== "GET") {
+              res.statusCode = 405;
+              res.end("Method Not Allowed");
+              return;
+            }
+
+            res.statusCode = 200;
+            res.setHeader("Content-Type", "application/json; charset=utf-8");
+            res.end(JSON.stringify({ token: gatewayToken }));
+          });
+
           server.middlewares.use(async (req, res, next) => {
             const pathname = (req.url ?? "").split("?")[0];
+            if (pathname === TOKEN_PATH || pathname === "/token") {
+              if (req.method !== "GET") {
+                res.statusCode = 405;
+                res.end("Method Not Allowed");
+                return;
+              }
+
+              res.statusCode = 200;
+              res.setHeader("Content-Type", "application/json; charset=utf-8");
+              res.end(JSON.stringify({ token: gatewayToken }));
+              return;
+            }
+
             if (pathname !== RUNTIME_CONNECTION_PATH) {
               next();
               return;
@@ -264,6 +359,7 @@ export default defineConfig(({ mode }) => {
     },
     server: {
       port: 5180,
+      allowedHosts: ["dushyants-mac-mini.tailfe16f6.ts.net"],
     },
   };
 });

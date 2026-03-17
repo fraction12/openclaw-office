@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { ZONES } from "@/lib/constants";
-import { useOfficeStore } from "@/store/office-store";
+import { useOfficeStore } from "@/store";
 
 interface ZoneLabelProps {
   zone: { x: number; y: number; width: number; height: number; label: string };

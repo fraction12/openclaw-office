@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { getAdapter, waitForAdapter } from "@/gateway/adapter-provider";
+import { getAdapterOrThrow } from "@/gateway/adapter-provider";
 import { useConfigStore } from "@/store/console-stores/config-store";
 import type {
   AgentCreateParams,
@@ -162,8 +162,8 @@ export const useAgentsStore = create<AgentsStoreState>((set, get) => ({
 
   fetchSystemModels: async () => {
     try {
-      await waitForAdapter();
-      const adapter = getAdapter();
+      getAdapterOrThrow();
+      const adapter = getAdapterOrThrow();
       const [snap, catalogModels] = await Promise.all([
         adapter.configGet(),
         adapter
@@ -233,8 +233,8 @@ export const useAgentsStore = create<AgentsStoreState>((set, get) => ({
   fetchAgents: async () => {
     set({ isLoading: true, error: null });
     try {
-      await waitForAdapter();
-      const result = await getAdapter().agentsList();
+      getAdapterOrThrow();
+      const result = await getAdapterOrThrow().agentsList();
       const agents = result.agents.map((a) => ({
         ...a,
         default: a.id === result.defaultId,
@@ -271,8 +271,8 @@ export const useAgentsStore = create<AgentsStoreState>((set, get) => ({
   fetchFiles: async (agentId) => {
     set({ filesLoading: true, files: [] });
     try {
-      await waitForAdapter();
-      const result = await getAdapter().agentsFilesList(agentId);
+      getAdapterOrThrow();
+      const result = await getAdapterOrThrow().agentsFilesList(agentId);
       set({ files: result.files, filesLoading: false });
     } catch {
       set({ filesLoading: false });
@@ -287,8 +287,8 @@ export const useAgentsStore = create<AgentsStoreState>((set, get) => ({
       isFileDirty: false,
     });
     try {
-      await waitForAdapter();
-      const result = await getAdapter().agentsFilesGet(agentId, name);
+      getAdapterOrThrow();
+      const result = await getAdapterOrThrow().agentsFilesGet(agentId, name);
       set({
         fileContent: result.file.content,
         originalFileContent: result.file.content,
@@ -312,8 +312,8 @@ export const useAgentsStore = create<AgentsStoreState>((set, get) => ({
   saveFileContent: async (agentId, name, content) => {
     set({ fileSaving: true });
     try {
-      await waitForAdapter();
-      await getAdapter().agentsFilesSet(agentId, name, content);
+      getAdapterOrThrow();
+      await getAdapterOrThrow().agentsFilesSet(agentId, name, content);
       set({ fileSaving: false, originalFileContent: content, isFileDirty: false });
       return true;
     } catch {
@@ -324,8 +324,8 @@ export const useAgentsStore = create<AgentsStoreState>((set, get) => ({
 
   createAgent: async (params) => {
     try {
-      await waitForAdapter();
-      const result = await getAdapter().agentsCreate(params);
+      getAdapterOrThrow();
+      const result = await getAdapterOrThrow().agentsCreate(params);
       if (result.ok) {
         await get().fetchAgents();
         return result.agentId;
@@ -338,8 +338,8 @@ export const useAgentsStore = create<AgentsStoreState>((set, get) => ({
 
   updateAgentModel: async (agentId, model) => {
     try {
-      await waitForAdapter();
-      const adapter = getAdapter();
+      getAdapterOrThrow();
+      const adapter = getAdapterOrThrow();
       const result = await adapter.agentsUpdate({ agentId, model });
       if (result.ok) {
         let messageKey = "configLifecycle.runtimeAgentModel";
@@ -361,8 +361,8 @@ export const useAgentsStore = create<AgentsStoreState>((set, get) => ({
 
   deleteAgent: async (agentId, deleteFiles) => {
     try {
-      await waitForAdapter();
-      const result = await getAdapter().agentsDelete({ agentId, deleteFiles });
+      getAdapterOrThrow();
+      const result = await getAdapterOrThrow().agentsDelete({ agentId, deleteFiles });
       if (result.ok) {
         set({ selectedAgentId: null });
         await get().fetchAgents();
@@ -382,8 +382,8 @@ export const useAgentsStore = create<AgentsStoreState>((set, get) => ({
   fetchAgentTools: async (agentId) => {
     set({ agentToolsLoading: true });
     try {
-      await waitForAdapter();
-      const adapter = getAdapter();
+      getAdapterOrThrow();
+      const adapter = getAdapterOrThrow();
       const [catalog, snap] = await Promise.all([
         adapter.toolsCatalog(agentId),
         adapter.configGet(),
@@ -403,8 +403,8 @@ export const useAgentsStore = create<AgentsStoreState>((set, get) => ({
 
   saveAgentToolsConfig: async (agentId, toolsConfig) => {
     try {
-      await waitForAdapter();
-      const adapter = getAdapter();
+      getAdapterOrThrow();
+      const adapter = getAdapterOrThrow();
       const { configHash } = get();
       const result = await patchAgentToolsConfig(
         adapter,
@@ -431,8 +431,8 @@ export const useAgentsStore = create<AgentsStoreState>((set, get) => ({
   fetchAgentSkills: async (agentId) => {
     set({ agentSkillsLoading: true });
     try {
-      await waitForAdapter();
-      const adapter = getAdapter();
+      getAdapterOrThrow();
+      const adapter = getAdapterOrThrow();
       const [skills, snap] = await Promise.all([
         adapter.skillsStatus(agentId),
         adapter.configGet(),
@@ -452,8 +452,8 @@ export const useAgentsStore = create<AgentsStoreState>((set, get) => ({
 
   saveAgentSkillsAllowlist: async (agentId, skills) => {
     try {
-      await waitForAdapter();
-      const adapter = getAdapter();
+      getAdapterOrThrow();
+      const adapter = getAdapterOrThrow();
       const { configHash } = get();
       const result = await patchAgentSkillsConfig(
         adapter,
@@ -480,8 +480,8 @@ export const useAgentsStore = create<AgentsStoreState>((set, get) => ({
   fetchAgentChannels: async () => {
     set({ agentChannelsLoading: true });
     try {
-      await waitForAdapter();
-      const channels = await getAdapter().channelsStatus();
+      getAdapterOrThrow();
+      const channels = await getAdapterOrThrow().channelsStatus();
       set({ agentChannels: channels, agentChannelsLoading: false });
     } catch {
       set({ agentChannelsLoading: false });
@@ -493,8 +493,8 @@ export const useAgentsStore = create<AgentsStoreState>((set, get) => ({
   fetchAgentCronJobs: async (agentId) => {
     set({ agentCronJobsLoading: true });
     try {
-      await waitForAdapter();
-      const all = await getAdapter().cronList();
+      getAdapterOrThrow();
+      const all = await getAdapterOrThrow().cronList();
       set({
         agentCronJobs: all.filter((j) => j.agentId === agentId),
         agentCronJobsLoading: false,
@@ -505,15 +505,15 @@ export const useAgentsStore = create<AgentsStoreState>((set, get) => ({
   },
 
   addAgentCronJob: async (agentId, input) => {
-    await waitForAdapter();
-    const task = await getAdapter().cronAdd({ ...input, agentId });
+    getAdapterOrThrow();
+    const task = await getAdapterOrThrow().cronAdd({ ...input, agentId });
     set((s) => ({ agentCronJobs: [...s.agentCronJobs, task] }));
     useConfigStore.getState().setRuntimeApplied("configLifecycle.runtimeCron");
   },
 
   updateAgentCronJob: async (id, patch) => {
-    await waitForAdapter();
-    const updated = await getAdapter().cronUpdate(id, patch);
+    getAdapterOrThrow();
+    const updated = await getAdapterOrThrow().cronUpdate(id, patch);
     set((s) => ({
       agentCronJobs: s.agentCronJobs.map((j) => (j.id === id ? updated : j)),
     }));
@@ -521,21 +521,21 @@ export const useAgentsStore = create<AgentsStoreState>((set, get) => ({
   },
 
   removeAgentCronJob: async (id) => {
-    await waitForAdapter();
-    await getAdapter().cronRemove(id);
+    getAdapterOrThrow();
+    await getAdapterOrThrow().cronRemove(id);
     set((s) => ({ agentCronJobs: s.agentCronJobs.filter((j) => j.id !== id) }));
     useConfigStore.getState().setRuntimeApplied("configLifecycle.runtimeCron");
   },
 
   runAgentCronJob: async (id) => {
-    await waitForAdapter();
-    await getAdapter().cronRun(id);
+    getAdapterOrThrow();
+    await getAdapterOrThrow().cronRun(id);
     useConfigStore.getState().setRuntimeApplied("configLifecycle.runtimeCron");
   },
 
   toggleAgentCronJob: async (id, enabled) => {
-    await waitForAdapter();
-    const updated = await getAdapter().cronUpdate(id, { enabled });
+    getAdapterOrThrow();
+    const updated = await getAdapterOrThrow().cronUpdate(id, { enabled });
     set((s) => ({
       agentCronJobs: s.agentCronJobs.map((j) => (j.id === id ? updated : j)),
     }));

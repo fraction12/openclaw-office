@@ -1,3 +1,5 @@
+import { applyIdentityAvatarStyle, getAgentDisplayName, getAgentIdentity } from "@/lib/agent-identities";
+
 export const PALETTE = [
   "#ef4444",
   "#f97316",
@@ -13,7 +15,7 @@ export const PALETTE = [
   "#ec4899",
 ];
 
-function hashString(str: string): number {
+export function hashString(str: string): number {
   let hash = 0;
   for (let i = 0; i < str.length; i++) {
     const ch = str.charCodeAt(i);
@@ -29,6 +31,10 @@ function luminance(hex: string): number {
   return 0.299 * r + 0.587 * g + 0.114 * b;
 }
 
+function fallbackColor(agentId: string): string {
+  return PALETTE[hashString(agentId) % PALETTE.length];
+}
+
 export interface AvatarInfo {
   backgroundColor: string;
   textColor: string;
@@ -36,11 +42,10 @@ export interface AvatarInfo {
 }
 
 export function generateAvatar(agentId: string, agentName?: string): AvatarInfo {
-  const hash = hashString(agentId);
-  const backgroundColor = PALETTE[hash % PALETTE.length];
+  const backgroundColor = getAgentIdentity(agentId)?.color ?? fallbackColor(agentId);
   const textColor = luminance(backgroundColor) > 0.5 ? "#000000" : "#ffffff";
 
-  const displayName = agentName ?? agentId;
+  const displayName = getAgentDisplayName(agentId, agentName);
   const initial = displayName.charAt(0).toUpperCase() || "?";
 
   return { backgroundColor, textColor, initial };
@@ -48,8 +53,11 @@ export function generateAvatar(agentId: string, agentName?: string): AvatarInfo 
 
 /** Deterministic hex color for 3D MeshStandardMaterial */
 export function generateAvatar3dColor(agentId: string): string {
-  const hash = hashString(agentId);
-  return PALETTE[hash % PALETTE.length];
+  return getAgentIdentity(agentId)?.color ?? fallbackColor(agentId);
+}
+
+export function generateAvatarAccentColor(agentId: string): string {
+  return getAgentIdentity(agentId)?.accentColor ?? fallbackColor(agentId);
 }
 
 // --- SVG Avatar ---
@@ -77,12 +85,14 @@ export function generateSvgAvatar(agentId: string): SvgAvatarData {
   const h = hashString(agentId);
   const bits = (offset: number, count: number) => (h >>> offset) % count;
 
-  return {
+  const baseAvatar: SvgAvatarData = {
     faceShape: FACE_SHAPES[bits(0, FACE_SHAPES.length)],
     hairStyle: HAIR_STYLES[bits(3, HAIR_STYLES.length)],
     eyeStyle: EYE_STYLES[bits(6, EYE_STYLES.length)],
     skinColor: SKIN_COLORS[bits(8, SKIN_COLORS.length)],
     hairColor: HAIR_COLORS[bits(11, HAIR_COLORS.length)],
-    shirtColor: PALETTE[h % PALETTE.length],
+    shirtColor: fallbackColor(agentId),
   };
+
+  return applyIdentityAvatarStyle(agentId, baseAvatar);
 }

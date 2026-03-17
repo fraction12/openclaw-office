@@ -9,8 +9,8 @@ import {
   ZONE_COLORS,
   ZONE_COLORS_DARK,
 } from "@/lib/constants";
-import { calculateDeskSlots, calculateMeetingSeatsSvg } from "@/lib/position-allocator";
-import { useOfficeStore } from "@/store/office-store";
+import { agentSlotIndex, calculateDeskSlots, calculateMeetingSeatsSvg, getReservedDeskNameplate } from "@/lib/position-allocator";
+import { useOfficeStore } from "@/store";
 import { AgentAvatar } from "./AgentAvatar";
 import { ConnectionLine } from "./ConnectionLine";
 import { DeskUnit } from "./DeskUnit";
@@ -388,12 +388,8 @@ function DeskZoneFurniture({
   const agentBySlot = useMemo(() => {
     const map = new Map<number, VisualAgent>();
     for (const agent of deskAgents) {
-      let hash = 0;
-      for (let i = 0; i < agent.id.length; i++) {
-        hash = ((hash << 5) - hash + agent.id.charCodeAt(i)) | 0;
-      }
-      const idx = Math.abs(hash) % deskSlots.length;
-      let slot = idx;
+      const preferred = agentSlotIndex(agent.id, deskSlots.length);
+      let slot = preferred;
       while (map.has(slot)) {
         slot = (slot + 1) % deskSlots.length;
       }
@@ -404,14 +400,40 @@ function DeskZoneFurniture({
 
   return (
     <g>
-      {deskSlots.map((slot, i) => (
-        <DeskUnit
-          key={`desk-${i}`}
-          x={slot.unitX}
-          y={slot.unitY}
-          agent={agentBySlot.get(i) ?? null}
-        />
-      ))}
+      {deskSlots.map((slot, i) => {
+        const agent = agentBySlot.get(i);
+        const nameplate = getReservedDeskNameplate(i) ?? agent?.name ?? null;
+        return (
+          <g key={`desk-${i}`}>
+            <DeskUnit x={slot.unitX} y={slot.unitY} agent={agent ?? null} />
+            {nameplate && (
+              <g opacity={0.85}>
+                <rect
+                  x={slot.unitX - 28}
+                  y={slot.unitY + 28}
+                  width={56}
+                  height={14}
+                  rx={7}
+                  fill="rgba(255,255,255,0.8)"
+                  stroke="rgba(71,85,105,0.18)"
+                  strokeWidth={0.8}
+                />
+                <text
+                  x={slot.unitX}
+                  y={slot.unitY + 38}
+                  textAnchor="middle"
+                  fontSize={8.5}
+                  fontWeight={600}
+                  fill="#64748b"
+                  letterSpacing="0.02em"
+                >
+                  {nameplate}
+                </text>
+              </g>
+            )}
+          </g>
+        );
+      })}
     </g>
   );
 }

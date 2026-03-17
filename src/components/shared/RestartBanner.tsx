@@ -1,7 +1,7 @@
 import { CheckCircle, Copy, Loader2, RefreshCw, Terminal } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useOfficeStore } from "@/store/office-store";
+import { useOfficeStore } from "@/store";
 import { useConfigStore, type ConfigLifecycleStatus } from "@/store/console-stores/config-store";
 
 const AUTO_CLEAR_MS = 2500;

@@ -1,10 +1,11 @@
 import i18n from "@/i18n";
-import type { AgentEventPayload, AgentVisualStatus, SpeechBubble, ToolInfo } from "./types";
+import type { AgentEventPayload, SpeechBubble, ToolInfo } from "./types";
+import type { AgentEvidence } from "@/store/evidence-store";
 
 export interface ParsedAgentEvent {
   runId: string;
   sessionKey?: string;
-  status: AgentVisualStatus;
+  evidencePatch: Partial<AgentEvidence>;
   currentTool: ToolInfo | null;
   speechBubble: SpeechBubble | null;
   clearTool: boolean;
@@ -18,7 +19,7 @@ export function parseAgentEvent(event: AgentEventPayload): ParsedAgentEvent {
   const base: ParsedAgentEvent = {
     runId: event.runId,
     sessionKey: event.sessionKey,
-    status: "idle",
+    evidencePatch: { lastWsEventAt: event.ts },
     currentTool: null,
     speechBubble: null,
     clearTool: false,
@@ -45,26 +46,25 @@ export function parseAgentEvent(event: AgentEventPayload): ParsedAgentEvent {
 
 function parseLifecycle(result: ParsedAgentEvent, event: AgentEventPayload): ParsedAgentEvent {
   const phase = event.data.phase as string | undefined;
+  result.evidencePatch.wsLifecycle = { phase: phase ?? "unknown", timestamp: event.ts };
 
   switch (phase) {
     case "start":
+      result.summary = i18n.t("common:events.startRunning");
+      break;
     case "thinking":
-      result.status = "thinking";
-      result.summary =
-        phase === "start" ? i18n.t("common:events.startRunning") : i18n.t("common:events.thinking");
+      result.summary = i18n.t("common:events.thinking");
       break;
     case "end":
-      result.status = "idle";
       result.clearTool = true;
       result.clearSpeech = true;
       result.summary = i18n.t("common:events.runEnded");
       break;
     case "fallback":
-      result.status = "error";
+      result.evidencePatch.wsError = { message: i18n.t("common:events.fallback"), timestamp: event.ts };
       result.summary = i18n.t("common:events.fallback");
       break;
     default:
-      result.status = "thinking";
       result.summary = i18n.t("common:events.lifecycleUnknown", { phase: phase ?? "unknown" });
   }
 
@@ -74,9 +74,9 @@ function parseLifecycle(result: ParsedAgentEvent, event: AgentEventPayload): Par
 function parseTool(result: ParsedAgentEvent, event: AgentEventPayload): ParsedAgentEvent {
   const phase = event.data.phase as string | undefined;
   const name = (event.data.name as string) ?? "unknown";
+  result.evidencePatch.wsToolCall = { name, phase: phase ?? "unknown", timestamp: event.ts };
 
   if (phase === "start") {
-    result.status = "tool_calling";
     result.currentTool = {
       name,
       args: event.data.args as Record<string, unknown> | undefined,
@@ -86,7 +86,6 @@ function parseTool(result: ParsedAgentEvent, event: AgentEventPayload): ParsedAg
     result.toolRecord = { name, timestamp: event.ts };
     result.summary = i18n.t("common:events.toolCall", { name });
   } else {
-    result.status = "thinking";
     result.clearTool = true;
     result.summary = i18n.t("common:events.toolDone", { name });
   }
@@ -96,7 +95,7 @@ function parseTool(result: ParsedAgentEvent, event: AgentEventPayload): ParsedAg
 
 function parseAssistant(result: ParsedAgentEvent, event: AgentEventPayload): ParsedAgentEvent {
   const text = (event.data.text as string) ?? "";
-  result.status = "speaking";
+  result.evidencePatch.wsSpeech = { text, timestamp: event.ts };
   result.speechBubble = { text, timestamp: event.ts };
   result.summary = text.length > 40 ? `${text.slice(0, 40)}...` : text;
   return result;
@@ -104,7 +103,7 @@ function parseAssistant(result: ParsedAgentEvent, event: AgentEventPayload): Par
 
 function parseError(result: ParsedAgentEvent, event: AgentEventPayload): ParsedAgentEvent {
   const message = (event.data.message as string) ?? i18n.t("common:errors.unknownError");
-  result.status = "error";
+  result.evidencePatch.wsError = { message, timestamp: event.ts };
   result.summary = i18n.t("common:events.errorPrefix", { message });
   return result;
 }

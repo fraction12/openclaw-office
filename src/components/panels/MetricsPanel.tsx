@@ -1,6 +1,6 @@
 import { lazy, Suspense, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useOfficeStore } from "@/store/office-store";
+import { useOfficeStore } from "@/store";
 
 const TokenLineChart = lazy(() =>
   import("./TokenLineChart").then((m) => ({ default: m.TokenLineChart })),
